@@ -1,0 +1,57 @@
+{
+  "id": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+  "name": "Project: Build a small autonomous robot that can navigate a",
+  "idea": "Build a small autonomous robot that can navigate a room using ultrasonic sensors",
+  "budgetTarget": 75,
+  "budgetActual": null,
+  "skillLevel": "beginner",
+  "createdAt": "2026-08-09T06:13:59.746Z",
+  "roadmapTasks": [
+    {
+      "id": "task_a370b2d1-5d9a-4c84-ba46-b2707f1cdaeb",
+      "projectId": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+      "title": "Assemble chassis and mount motors",
+      "description": "Attach DC motors to the chassis plate, secure wheels, and verify free rotation.",
+      "status": "not_started",
+      "dependencies": [],
+      "order": 1
+    },
+    {
+      "id": "task_e480e347-c04d-47f2-b147-827f2e111a82",
+      "projectId": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+      "title": "Wire motor driver to Arduino",
+      "description": "Connect L298N motor driver to Arduino digital pins and motor terminals.",
+      "status": "not_started",
+      "dependencies": [],
+      "order": 2
+    },
+    {
+      "id": "task_bf10a65a-522e-4347-861e-14f98a564fc7",
+      "projectId": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+      "title": "Install power supply",
+      "description": "Mount battery pack, wire to motor driver VCC and Arduino VIN.",
+      "status": "not_started",
+      "dependencies": [],
+      "order": 3
+    },
+    {
+      "id": "task_f649db6f-9810-4e98-acfc-164afb0cdd64",
+      "projectId": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+      "title": "Upload basic motor test code",
+      "description": "Write and upload Arduino sketch to test forward/backward/turn.",
+      "status": "not_started",
+      "dependencies": [],
+      "order": 4
+    },
+    {
+      "id": "task_7ab3a8b4-fad7-4d4e-8ebb-0e2898930a6b",
+      "projectId": "proj_91902673-c2fb-4a5d-a683-638263504d9b",
+      "title": "Final assembly and test drive",
+      "description": "Secure all wiring, close chassis, and perform full mobility test.",
+      "status": "not_started",
+      "dependencies": [],
+      "order": 5
+    }
+  ],
+  "commits": []
+}
