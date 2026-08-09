@@ -1,0 +1,116 @@
+﻿{
+    "project":  {
+                    "id":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                    "name":  "Project: Build a line-following robot with Arduino",
+                    "idea":  "Build a line-following robot with Arduino",
+                    "budgetTarget":  50,
+                    "budgetActual":  null,
+                    "skillLevel":  "beginner",
+                    "createdAt":  "2026-08-09T06:29:32.274Z",
+                    "roadmapTasks":  [
+                                         {
+                                             "id":  "task_917337b4-9836-4314-b59e-931530d95073",
+                                             "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                                             "title":  "Assemble chassis and mount motors",
+                                             "description":  "Attach DC motors to the chassis plate, secure wheels, and verify free rotation.",
+                                             "status":  "not_started",
+                                             "dependencies":  [
+
+                                                              ],
+                                             "order":  1
+                                         },
+                                         {
+                                             "id":  "task_ff320e57-c3c2-4fb2-8149-10b9e9bd0c31",
+                                             "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                                             "title":  "Wire motor driver to Arduino",
+                                             "description":  "Connect L298N motor driver to Arduino digital pins and motor terminals.",
+                                             "status":  "not_started",
+                                             "dependencies":  [
+
+                                                              ],
+                                             "order":  2
+                                         },
+                                         {
+                                             "id":  "task_28bb96f8-0e05-4049-b0bd-95f825dae889",
+                                             "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                                             "title":  "Install power supply",
+                                             "description":  "Mount battery pack, wire to motor driver VCC and Arduino VIN.",
+                                             "status":  "not_started",
+                                             "dependencies":  [
+
+                                                              ],
+                                             "order":  3
+                                         },
+                                         {
+                                             "id":  "task_e17f5428-6698-4e72-813f-61f203bcf6a0",
+                                             "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                                             "title":  "Upload basic motor test code",
+                                             "description":  "Write and upload Arduino sketch to test forward/backward/turn.",
+                                             "status":  "not_started",
+                                             "dependencies":  [
+
+                                                              ],
+                                             "order":  4
+                                         },
+                                         {
+                                             "id":  "task_76d475c7-2c28-4bf9-9e70-85211b87e406",
+                                             "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                                             "title":  "Final assembly and test drive",
+                                             "description":  "Secure all wiring, close chassis, and perform full mobility test.",
+                                             "status":  "not_started",
+                                             "dependencies":  [
+
+                                                              ],
+                                             "order":  5
+                                         }
+                                     ]
+                },
+    "aiGenerated":  {
+                        "overview":  "A project to build: Build a line-following robot with Arduino",
+                        "materials":  [
+                                          {
+                                              "item":  "Arduino Uno",
+                                              "quantity":  1,
+                                              "estimatedCost":  25
+                                          },
+                                          {
+                                              "item":  "DC Motors (6V)",
+                                              "quantity":  2,
+                                              "estimatedCost":  8
+                                          },
+                                          {
+                                              "item":  "Motor Driver (L298N)",
+                                              "quantity":  1,
+                                              "estimatedCost":  7
+                                          },
+                                          {
+                                              "item":  "Chassis Kit",
+                                              "quantity":  1,
+                                              "estimatedCost":  15
+                                          },
+                                          {
+                                              "item":  "Battery Pack (4xAA)",
+                                              "quantity":  1,
+                                              "estimatedCost":  5
+                                          },
+                                          {
+                                              "item":  "Jumper Wires",
+                                              "quantity":  20,
+                                              "estimatedCost":  3
+                                          }
+                                      ],
+                        "totalEstimatedCost":  63,
+                        "tools":  [
+                                      "Screwdriver",
+                                      "Wire strippers",
+                                      "Soldering iron",
+                                      "Hot glue gun"
+                                  ],
+                        "instructions":  [
+                                             "Start by assembling the chassis — attach motors and wheels first.",
+                                             "Wire the motor driver before connecting power to avoid shorts.",
+                                             "Test each motor individually before running both together.",
+                                             "Secure loose wires with zip ties or hot glue before the test drive."
+                                         ]
+                    }
+}

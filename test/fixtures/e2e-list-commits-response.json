@@ -1,0 +1,75 @@
+﻿{
+    "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+    "count":  1,
+    "commits":  [
+                    {
+                        "id":  "commit_103e118b-1cd4-447d-b82c-ee1b25b07a2b",
+                        "projectId":  "proj_de8fd018-5d55-4f98-99d2-fef714c70ac1",
+                        "timestamp":  "2026-08-09T06:36:20.474Z",
+                        "mediaUrl":  "/storage/proj_de8fd018-5d55-4f98-99d2-fef714c70ac1/commit_103e118b-1cd4-447d-b82c-ee1b25b07a2b.jpg",
+                        "userNote":  "Finished assembling the chassis and mounting both motors. Moved battery holder to the back for balance.",
+                        "detectedChanges":  {
+                                                "added":  [
+                                                              "Chassis assembled",
+                                                              "Motors mounted to base plate"
+                                                          ],
+                                                "removed":  [
+
+                                                            ],
+                                                "modified":  [
+                                                                 "Battery holder repositioned to rear"
+                                                             ]
+                                            },
+                        "projectState":  {
+                                             "components":  [
+                                                                "Chassis (assembled)",
+                                                                "DC Motors x2 (mounted)",
+                                                                "Wheels x2 (attached)",
+                                                                "Battery holder (repositioned)"
+                                                            ],
+                                             "completedTasks":  [
+                                                                    "Assemble chassis and mount motors"
+                                                                ],
+                                             "remainingTasks":  [
+                                                                    "Wire motor driver to Arduino",
+                                                                    "Install power supply",
+                                                                    "Upload basic motor test code",
+                                                                    "Final assembly and test drive"
+                                                                ],
+                                             "problems":  [
+
+                                                          ]
+                                         },
+                        "completedTasks":  [
+                                               "Assemble chassis and mount motors"
+                                           ],
+                        "roadmapState":  [
+                                             {
+                                                 "id":  "task_917337b4-9836-4314-b59e-931530d95073",
+                                                 "title":  "Assemble chassis and mount motors",
+                                                 "status":  "completed"
+                                             },
+                                             {
+                                                 "id":  "task_ff320e57-c3c2-4fb2-8149-10b9e9bd0c31",
+                                                 "title":  "Wire motor driver to Arduino",
+                                                 "status":  "not_started"
+                                             },
+                                             {
+                                                 "id":  "task_28bb96f8-0e05-4049-b0bd-95f825dae889",
+                                                 "title":  "Install power supply",
+                                                 "status":  "not_started"
+                                             },
+                                             {
+                                                 "id":  "task_e17f5428-6698-4e72-813f-61f203bcf6a0",
+                                                 "title":  "Upload basic motor test code",
+                                                 "status":  "not_started"
+                                             },
+                                             {
+                                                 "id":  "task_76d475c7-2c28-4bf9-9e70-85211b87e406",
+                                                 "title":  "Final assembly and test drive",
+                                                 "status":  "not_started"
+                                             }
+                                         ]
+                    }
+                ]
+}
