@@ -83,7 +83,7 @@ router.post("/next-steps", async (req, res) => {
       body: JSON.stringify({
         content: prompt,
         llm_provider: "anthropic",
-        model_name: "claude-sonnet-5",
+        model_name: process.env.AI_MODEL || "claude-sonnet-5",
         stream: false
       })
     });
@@ -102,7 +102,13 @@ router.post("/next-steps", async (req, res) => {
       return res.status(502).json({ error: "LLM provider returned an error" });
     }
 
-    const result = JSON.parse(data.content);
+    // Strip markdown code fences if the model wraps the JSON
+    let rawContent = data.content.trim();
+    if (rawContent.startsWith("```")) {
+      rawContent = rawContent.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    const result = JSON.parse(rawContent);
 
     return res.status(200).json(result);
   } catch (err) {

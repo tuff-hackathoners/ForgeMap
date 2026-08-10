@@ -38,25 +38,37 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       skillLevel: skillLevel ?? 'beginner',
     });
 
-    // Create roadmap tasks
+    // Create roadmap tasks (store visual guide in description for persistence)
     const tasks = await RoadmapTaskModel.createMany(
       project.id,
       aiResult.roadmap.map((step) => ({
         title: step.title,
-        description: step.description,
+        description: step.visualGuide
+          ? `${step.description}\n\n📐 Visual Guide: ${step.visualGuide}`
+          : step.description,
         order: step.order,
         dependencies: step.dependencies,
       }))
     );
 
+    // Build rich roadmap for the response (includes tips, openscad, svg)
+    const richRoadmap = tasks.map((task, idx) => ({
+      ...RoadmapTaskModel.serialize(task),
+      visualGuide: aiResult.roadmap[idx]?.visualGuide || null,
+      tips: aiResult.roadmap[idx]?.tips || [],
+      openscadCode: aiResult.roadmap[idx]?.openscadCode || null,
+      svgProfile: aiResult.roadmap[idx]?.svgProfile || null,
+    }));
+
     // Return full response
     res.status(201).json({
       project: {
         ...project,
-        roadmapTasks: tasks.map(RoadmapTaskModel.serialize),
+        roadmapTasks: richRoadmap,
       },
       aiGenerated: {
         overview: aiResult.overview,
+        assemblyDrawing: aiResult.assemblyDrawing || null,
         materials: aiResult.materials,
         totalEstimatedCost: aiResult.totalEstimatedCost,
         tools: aiResult.tools,

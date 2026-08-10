@@ -37,4 +37,34 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`AI service listening on :${PORT}`);
+  // Warmup: fire a lightweight request to Backboard so the connection is hot
+  // for the first real user request. This eliminates cold-start latency.
+  warmupBackboard();
 });
+
+async function warmupBackboard() {
+  try {
+    const start = Date.now();
+    const res = await fetch("https://app.backboard.io/api/threads/messages", {
+      method: "POST",
+      headers: {
+        "X-API-Key": process.env.BACKBOARD_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        content: "Reply with only: ok",
+        llm_provider: "anthropic",
+        model_name: process.env.AI_MODEL || "claude-sonnet-5",
+        stream: false
+      })
+    });
+    const elapsed = Date.now() - start;
+    if (res.ok) {
+      console.log(`  ✓ Backboard warmed up in ${elapsed}ms`);
+    } else {
+      console.warn(`  ⚠ Backboard warmup returned ${res.status} (${elapsed}ms)`);
+    }
+  } catch (err) {
+    console.warn(`  ⚠ Backboard warmup failed: ${err.message}`);
+  }
+}

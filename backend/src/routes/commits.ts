@@ -83,6 +83,7 @@ router.post('/:id/commits', upload.single('photo'), async (req: Request, res: Re
       analysis: {
         summary: analysis.summary,
         nextSteps: analysis.nextSteps,
+        nextStep: analysis.nextStep || null,
         fromAI,
       },
     });

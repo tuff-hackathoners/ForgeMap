@@ -29,26 +29,29 @@ ${JSON.stringify(roadmap, null, 2)}
 
 ${user_note ? `User's note about this update: "${user_note}"` : "No additional user note was provided."}
 
-Compare what you see in the image against the previous project state and roadmap. Respond with ONLY valid JSON, no markdown code fences, no explanation before or after — just the raw JSON object, matching this exact shape:
+Compare what you see in the image against the previous project state and roadmap. Respond with ONLY valid JSON, no markdown code fences:
 
 {
-  "detected_changes": {
-    "added": [string],
-    "removed": [string],
-    "changed": [string]
-  },
+  "detected_changes": { "added": [string], "removed": [string], "changed": [string] },
   "completed_tasks": [string],
   "remaining_tasks": [string],
   "problems": [string],
-  "summary": string
+  "summary": string,
+  "next_step": {
+    "task_id": string (the highest-priority unblocked task to work on next),
+    "reason": string (why this is next — reference what was just completed),
+    "svg_guide": string (SVG with viewBox="0 0 200 150" showing what this next step looks like when DONE — a simple engineering sketch with dimension labels and key features),
+    "openscad_code": string or null (if CAD/3D-printing project: valid OpenSCAD under 15 lines; otherwise null for physical builds)
+  }
 }
 
 Rules:
-- "completed_tasks" and "remaining_tasks" must only contain task ids that actually exist in the provided roadmap.
-- Only mark a task as completed if the image gives clear visual evidence it's actually done — don't guess or assume.
-- "problems" should list only concrete, visible issues (e.g. loose joint, misaligned part) — leave it as an empty array if nothing looks wrong.
-- "summary" should be 1-3 plain-English sentences describing the visible progress, suitable for showing directly to the user.
-- If the image doesn't clearly show progress on any roadmap task, it's fine to return empty arrays for completed_tasks and detected_changes fields.`;
+- "completed_tasks" and "remaining_tasks" must only contain task ids from the provided roadmap.
+- Only mark a task completed if the image gives clear evidence it's done.
+- "problems": only concrete visible issues, or empty array.
+- "summary": 1-3 sentences describing visible progress.
+- "next_step": pick the single most important unblocked task. svg_guide = a 2D diagram of what this step looks like when finished (part shape, dimensions, spatial relationships). For CAD projects include openscad_code; for physical builds set it to null.
+- svg_guide: keep it simple — outline shapes, dimension text labels, key feature callouts. viewBox="0 0 200 150".`;
 }
 
 /**
@@ -179,7 +182,7 @@ router.post("/analyze-progress", upload.single("image"), async (req, res) => {
         content: prompt,
         assistant_id: assistantId,
         llm_provider: "anthropic",
-        model_name: "claude-sonnet-5",
+        model_name: process.env.AI_MODEL || "claude-sonnet-5",
         stream: false
       })
     });
@@ -195,7 +198,13 @@ router.post("/analyze-progress", upload.single("image"), async (req, res) => {
       return res.status(502).json({ error: "LLM provider returned an error" });
     }
 
-    const result = JSON.parse(data.content);
+    // Strip markdown code fences if the model wraps the JSON
+    let rawContent = data.content.trim();
+    if (rawContent.startsWith("```")) {
+      rawContent = rawContent.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    const result = JSON.parse(rawContent);
 
     return res.status(200).json(result);
   } catch (err) {
