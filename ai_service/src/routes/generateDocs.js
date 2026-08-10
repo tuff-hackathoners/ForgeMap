@@ -1,7 +1,12 @@
 import { Router } from "express";
-import { mockFinalDocs } from "../mocks/mockResponses.js";
+import { sendMessage, TimeoutError, LLMError } from "../lib/backboard.js";
 
 const router = Router();
+
+/** Maximum number of commits to accept before rejecting as too large. */
+const MAX_COMMITS = 500;
+/** Maximum number of roadmap items to accept. */
+const MAX_ROADMAP_ITEMS = 200;
 
 /**
  * Builds the prompt sent to Claude for final project documentation.
@@ -23,7 +28,7 @@ ${JSON.stringify(original_roadmap ?? [], null, 2)}
 Final roadmap (state at completion):
 ${JSON.stringify(final_roadmap ?? [], null, 2)}
 
-Using this full history, write a complete final project document. Respond with ONLY valid JSON, no markdown code fences, no explanation before or after — just the raw JSON object, matching this exact shape:
+Using this full history, produce a complete final project document as a single JSON object. Do NOT wrap the output in markdown code fences or add any text outside the JSON. Use this exact structure:
 
 {
   "project_overview": string,
@@ -46,10 +51,11 @@ Using this full history, write a complete final project document. Respond with O
 
 Rules:
 - "project_overview" and "final_result" should be written in clear, plain English suitable for someone who never saw the build in person.
-- "design_decisions" and "problems_encountered" must be drawn from what actually appears in the commit history — do not invent decisions or problems that aren't reflected in the commits or notes provided. If none are evident, return an empty array for that field.
-- "reproduction_instructions" should be a clean, step-by-step version of the build process that another person could follow, derived from the roadmap and commit history — not a verbatim copy of the original task descriptions.
-- "actual_cost" should be calculated from materials_used if individual prices are inferable from the commit history; otherwise use the most reasonable estimate available and note any assumption inside "final_specifications" if relevant.
-- Pass "commit_history" through unchanged from what was provided — do not summarize or drop entries.`;
+- "design_decisions" and "problems_encountered" must be drawn from what actually appears in the commit history — do not invent decisions or problems that aren't reflected in the data. Return an empty array if none are evident.
+- "reproduction_instructions" should be a clean, step-by-step guide another person could follow, derived from the roadmap and commit history — not a verbatim copy of original task descriptions.
+- "actual_cost" should be the sum of materials_used actual_price values where inferable; otherwise use the best available estimate.
+- "commit_history" must be passed through verbatim from the input — do not summarize, reorder, or drop entries.
+- Output ONLY the JSON object, nothing else.`;
 }
 
 /**
@@ -71,6 +77,7 @@ Rules:
  * @response 400 {object} { error: string } — invalid or missing input
  * @response 500 {object} { error: string } — AI generation failure
  * @response 502 {object} { error: string } — LLM provider returned an error
+ * @response 504 {object} { error: string } — request to LLM timed out
  */
 router.post("/generate-docs", async (req, res) => {
   const { project, commits, original_roadmap, final_roadmap } = req.body ?? {};
@@ -88,47 +95,46 @@ router.post("/generate-docs", async (req, res) => {
     return res.status(400).json({ error: "commits must contain at least one entry" });
   }
 
+  if (commits.length > MAX_COMMITS) {
+    return res.status(400).json({ error: `commits exceeds maximum of ${MAX_COMMITS} entries` });
+  }
+
   if (original_roadmap !== undefined && !Array.isArray(original_roadmap)) {
     return res.status(400).json({ error: "original_roadmap must be an array when provided" });
+  }
+
+  if (original_roadmap && original_roadmap.length > MAX_ROADMAP_ITEMS) {
+    return res.status(400).json({ error: `original_roadmap exceeds maximum of ${MAX_ROADMAP_ITEMS} items` });
   }
 
   if (final_roadmap !== undefined && !Array.isArray(final_roadmap)) {
     return res.status(400).json({ error: "final_roadmap must be an array when provided" });
   }
 
+  if (final_roadmap && final_roadmap.length > MAX_ROADMAP_ITEMS) {
+    return res.status(400).json({ error: `final_roadmap exceeds maximum of ${MAX_ROADMAP_ITEMS} items` });
+  }
+
   try {
     const prompt = buildFinalDocsPrompt({ project, commits, original_roadmap, final_roadmap });
 
-    const backboardResponse = await fetch("https://app.backboard.io/api/threads/messages", {
-      method: "POST",
-      headers: {
-        "X-API-Key": process.env.BACKBOARD_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        content: prompt,
-        llm_provider: "anthropic",
-        model_name: "claude-sonnet-5",
-        stream: false
-      })
+    // Docs generation can be large — give it a longer timeout (60s).
+    const result = await sendMessage({
+      prompt,
+      timeoutMs: 60_000,
+      routeName: "generate-docs"
     });
-
-    if (!backboardResponse.ok) {
-      throw new Error(`Backboard API returned status ${backboardResponse.status}`);
-    }
-
-    const data = await backboardResponse.json();
-
-    if (!data.content || data.content.startsWith("LLM Error")) {
-      console.error("Backboard LLM error:", data.content);
-      return res.status(502).json({ error: "LLM provider returned an error" });
-    }
-
-    const result = JSON.parse(data.content);
 
     return res.status(200).json(result);
   } catch (err) {
     console.error("generate-docs failed:", err);
+
+    if (err instanceof TimeoutError) {
+      return res.status(504).json({ error: "AI request timed out — please try again" });
+    }
+    if (err instanceof LLMError) {
+      return res.status(502).json({ error: "LLM provider returned an error" });
+    }
     return res.status(500).json({ error: "AI generation failed" });
   }
 });

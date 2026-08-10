@@ -14,9 +14,10 @@ if (!process.env.BACKBOARD_API_KEY || process.env.BACKBOARD_API_KEY === "your_ke
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// analyzeProgress handles its own multipart parsing (multer),
-// everything else is plain JSON.
-app.use(express.json());
+// Limit JSON body size to 2MB — prevents accidentally sending absurdly large
+// payloads (e.g. full commit histories with embedded images) that would waste
+// Backboard API credits and potentially OOM the process.
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
@@ -31,8 +32,18 @@ app.use((err, req, res, next) => {
   if (err.type === "entity.parse.failed") {
     return res.status(400).json({ error: "Request body contains invalid JSON" });
   }
+  if (err.type === "entity.too.large") {
+    return res.status(400).json({ error: "Request body is too large (max 2MB)" });
+  }
   console.error(err);
   return res.status(500).json({ error: "Unexpected server error" });
+});
+
+// Catch-all for unhandled promise rejections at the process level.
+// Prevents the server from crashing on an unhandled async error that
+// somehow escapes the route-level try/catch.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
 });
 
 app.listen(PORT, () => {
