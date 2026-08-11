@@ -1,179 +1,211 @@
 import "./styles.css";
 
-type View = "dashboard" | "create" | "roadmap" | "update" | "history" | "diff" | "docs";
-type Status = "completed" | "current" | "upcoming" | "blocked";
+type Route = "create" | "dashboard" | "roadmap" | "update" | "history" | "diff" | "docs";
+type RoadmapStatus = "not_started" | "in_progress" | "completed" | "blocked";
 
-type RoadmapNode = {
+type RoadmapTask = {
   id: string;
+  projectId?: string;
   title: string;
-  status: Status;
-  x: number;
-  y: number;
-  time: string;
-  materials: string;
-  instructions: string;
+  description: string;
+  status: RoadmapStatus;
+  dependencies: string[];
+  order: number;
+  visualGuide?: string;
+  tips?: string[];
+  openscadCode?: string | null;
+  svgProfile?: string | null;
 };
 
-type Commit = {
-  id: string;
-  title: string;
-  date: string;
-  progress: number;
-  image?: string;
-  note: string;
-  summary: string;
-  added: string[];
-  modified: string[];
-  removed: string[];
-  completed: string[];
-  decisions: string[];
-  problems: string[];
-  nextStep: string;
+type Material = {
+  item: string;
+  quantity: number;
+  estimatedCost?: number;
+  actualCost?: number;
 };
 
 type Project = {
   id: string;
   name: string;
   idea: string;
-  budget: number;
-  spent: number;
-  skill: string;
-  deadline: string;
-  milestone: string;
-  nextStep: string;
-  problems: string[];
+  budgetTarget?: number | null;
+  budgetActual?: number | null;
+  skillLevel?: string | null;
+  createdAt: string;
+  roadmapTasks: RoadmapTask[];
+};
+
+type AiGenerated = {
+  overview: string;
+  assemblyDrawing?: string | null;
+  materials: Material[];
+  totalEstimatedCost?: number | null;
+  tools: string[];
+  instructions: string[];
+  fromAI: boolean;
+};
+
+type Commit = {
+  id: string;
+  projectId: string;
+  timestamp: string;
+  mediaUrl?: string | null;
+  userNote?: string | null;
+  detectedChanges: { added: string[]; removed: string[]; modified: string[] };
+  projectState: {
+    components: string[];
+    completedTasks: string[];
+    remainingTasks: string[];
+    problems: string[];
+  };
+  completedTasks: string[];
+  roadmapState?: Array<{ id: string; title: string; status: RoadmapStatus }>;
+};
+
+type CommitAnalysis = {
+  summary: string;
+  nextSteps: string[];
+  nextStep?: {
+    taskId?: string;
+    reason: string;
+    svgGuide?: string | null;
+    openscadCode?: string | null;
+  } | null;
+  fromAI: boolean;
+};
+
+type Documentation = {
+  title: string;
+  overview: string;
+  finalResult: string;
+  materials: Material[];
+  totalCost?: number | null;
+  tools: string[];
+  originalRoadmap: string[];
+  finalRoadmap: string[];
+  commitHistory: Array<{ timestamp: string; summary: string; changes: string[] }>;
+  designDecisions: Array<{ decision: string; reason: string; consequence: string }>;
+  problemsSolved: Array<{ problem: string; solution: string }>;
+  reproductionSteps: string[];
+};
+
+type ProjectBundle = {
+  project: Project;
+  aiGenerated: AiGenerated;
+  commits: Commit[];
+  lastAnalysis?: CommitAnalysis;
+  documentation?: Documentation;
 };
 
 type AppState = {
-  view: View;
-  project: Project | null;
-  roadmap: RoadmapNode[];
-  commits: Commit[];
+  route: Route;
+  bundle: ProjectBundle | null;
+  selectedTaskId: string;
   selectedCommitId: string;
-  selectedNodeId: string;
+  notice: string;
+  busy: string;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
-const STORAGE_KEY = "physical-git-state";
+const STORAGE_KEY = "forgemap.frontend.state.v2";
 let placeholderTimers: number[] = [];
-
-const emptyState: AppState = {
-  view: "create",
-  project: null,
-  roadmap: [],
-  commits: [],
-  selectedCommitId: "",
-  selectedNodeId: "",
-};
 
 const state: AppState = loadState();
 
-const statusLabel: Record<Status, string> = {
-  completed: "Completed",
-  current: "Current",
-  upcoming: "Upcoming",
-  blocked: "Blocked",
-};
-
-const edges = [
-  ["plan", "materials"],
-  ["materials", "first-build"],
-  ["first-build", "core-assembly"],
-  ["core-assembly", "branch-a"],
-  ["core-assembly", "branch-b"],
-  ["branch-a", "test"],
-  ["branch-b", "test"],
-];
-
 function loadState(): AppState {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return structuredClone(emptyState);
   try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return emptyState();
     const parsed = JSON.parse(saved) as AppState;
-    return parsed.project ? parsed : structuredClone(emptyState);
+    return parsed && "bundle" in parsed ? parsed : emptyState();
   } catch {
-    return structuredClone(emptyState);
+    return emptyState();
   }
+}
+
+function emptyState(): AppState {
+  return { route: "create", bundle: null, selectedTaskId: "", selectedCommitId: "", notice: "", busy: "" };
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function el<T extends keyof HTMLElementTagNameMap>(
-  tag: T,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[T] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text) node.textContent = text;
-  return node;
+function uid(prefix: string) {
+  return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (char) => {
-    const map: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;",
-    };
-    return map[char];
-  });
+function escapeHtml(value = "") {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]!);
+}
+
+function mediaUrl(path?: string | null) {
+  if (!path) return "";
+  if (path.startsWith("blob:") || path.startsWith("http")) return path;
+  return `${API_BASE}${path}`;
+}
+
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, options);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(body.error ?? "Request failed");
+  }
+  return response.json();
 }
 
 function project() {
-  if (!state.project) throw new Error("Project has not been created.");
-  return state.project;
+  if (!state.bundle) throw new Error("No project loaded");
+  return state.bundle.project;
 }
 
-function progress() {
-  return state.commits[0]?.progress ?? 0;
+function tasks() {
+  return state.bundle?.project.roadmapTasks ?? [];
+}
+
+function commits() {
+  return state.bundle?.commits ?? [];
+}
+
+function progressPercent() {
+  const all = tasks();
+  if (!all.length) return 0;
+  return Math.round((all.filter((task) => task.status === "completed").length / all.length) * 100);
+}
+
+function currentTask() {
+  return tasks().find((task) => task.status === "in_progress") ?? tasks().find((task) => task.status === "not_started") ?? tasks()[0];
+}
+
+function selectedTask() {
+  return tasks().find((task) => task.id === state.selectedTaskId) ?? currentTask();
 }
 
 function selectedCommit() {
-  return state.commits.find((commit) => commit.id === state.selectedCommitId) ?? state.commits[0];
+  return commits().find((commit) => commit.id === state.selectedCommitId) ?? commits()[0];
 }
 
-function selectedNode() {
-  return state.roadmap.find((node) => node.id === state.selectedNodeId) ?? state.roadmap[0];
+function setRoute(route: Route) {
+  state.route = state.bundle ? route : "create";
+  history.pushState(null, "", `#${state.route}`);
+  saveState();
+  render();
 }
 
 function render() {
   const app = document.querySelector<HTMLDivElement>("#app");
   if (!app) return;
-  placeholderTimers.forEach((timer) => window.clearTimeout(timer));
+  placeholderTimers.forEach((timer) => clearTimeout(timer));
   placeholderTimers = [];
   app.innerHTML = "";
-  app.append(renderShell());
+  app.append(renderNav(), renderMain());
   bindActions();
 }
 
-function renderShell() {
-  const shell = el("main", "app-shell");
-  shell.append(renderNav());
-
-  const workspace = el("section", "workspace");
-  const views: View[] = state.project
-    ? ["dashboard", "create", "roadmap", "update", "history", "diff", "docs"]
-    : ["create"];
-
-  views.forEach((view) => {
-    const screen = el("section", `screen ${state.view === view ? "active-screen" : ""}`);
-    screen.dataset.view = view;
-    screen.append(renderView(view));
-    workspace.append(screen);
-  });
-
-  shell.append(workspace);
-  return shell;
-}
-
 function renderNav() {
-  const nav = el("nav", "nav");
-  const navItems: Array<[View, string]> = [
+  const nav = document.createElement("nav");
+  nav.className = "nav";
+  const items: Array<[Route, string]> = [
     ["dashboard", "Dashboard"],
     ["roadmap", "Roadmap"],
     ["update", "Update"],
@@ -181,577 +213,472 @@ function renderNav() {
     ["diff", "Diff"],
     ["docs", "Docs"],
   ];
-
   nav.innerHTML = `
     <div class="brand"><span></span><strong>Forgemap</strong></div>
     <div class="nav-links">
-      ${
-        state.project
-          ? navItems
-              .map(
-                ([view, label]) =>
-                  `<button class="${state.view === view ? "active" : ""}" data-view="${view}" type="button">${label}</button>`,
-              )
-              .join("")
-          : ""
-      }
+      ${state.bundle ? items.map(([route, label]) => `<button type="button" data-route="${route}" class="${state.route === route ? "active" : ""}">${label}</button>`).join("") : ""}
     </div>
-    ${
-      state.project
-        ? `<button type="button" id="reset-project" class="secondary">New Project</button>`
-        : `<span></span>`
-    }
+    ${state.bundle ? `<button type="button" id="new-project" class="secondary">New Project</button>` : `<span></span>`}
   `;
   return nav;
 }
 
-function renderView(view: View) {
-  if (!state.project && view !== "create") return renderCreateProject();
-  if (view === "create") return renderCreateProject();
-  if (view === "dashboard") return renderDashboard();
-  if (view === "roadmap") return renderRoadmap();
-  if (view === "update") return renderUpdate();
-  if (view === "history") return renderHistory();
-  if (view === "diff") return renderDiff();
-  return renderDocs();
+function renderMain() {
+  const main = document.createElement("main");
+  main.className = "workspace";
+  if (state.notice) main.append(renderNotice(state.notice));
+  if (state.busy) main.append(renderBusy(state.busy));
+
+  if (!state.bundle || state.route === "create") main.append(renderCreatePage());
+  else if (state.route === "roadmap") main.append(renderRoadmapPage());
+  else if (state.route === "update") main.append(renderUpdatePage());
+  else if (state.route === "history") main.append(renderHistoryPage());
+  else if (state.route === "diff") main.append(renderDiffPage());
+  else if (state.route === "docs") main.append(renderDocsPage());
+  else main.append(renderDashboardPage());
+  return main;
 }
 
-function renderCreateProject() {
-  const p = state.project;
-  const section = el("section", "section-grid");
+function renderNotice(message: string) {
+  const div = document.createElement("div");
+  div.className = "notice";
+  div.innerHTML = `<span>${escapeHtml(message)}</span><button type="button" data-clear-notice>Dismiss</button>`;
+  return div;
+}
+
+function renderBusy(message: string) {
+  const div = document.createElement("div");
+  div.className = "busy";
+  div.innerHTML = `<span></span><strong>${escapeHtml(message)}</strong>`;
+  return div;
+}
+
+function renderCreatePage(compact = false) {
+  const section = document.createElement("section");
+  section.className = compact ? "create-page compact-create" : "create-page";
   section.innerHTML = `
-    <article class="panel create-panel">
-      <div class="section-head">
-        <div>
-          <span>${p ? "Create Another Project" : "Create Project"}</span>
-          <h1>${p ? "Start a new build record." : "What are you building?"}</h1>
-          <p>${p ? "This will replace the local project in this browser." : "Describe a real physical project and Physical Git will generate a working roadmap, progress tracker, and documentation space."}</p>
-        </div>
-        ${p ? `<button type="button" data-view="dashboard" class="secondary">Cancel</button>` : ""}
+    <header class="page-head">
+      <span>Create Project</span>
+      <h1>What are you building?</h1>
+      <p>Describe a real project. Forgemap will generate a roadmap, materials, instructions, and a place to track progress updates.</p>
+    </header>
+    <form class="create-form" novalidate>
+      <div class="field">
+        <span class="form-label">Project title<span class="required">*</span></span>
+        <input name="title" data-placeholder="title" type="text" autocomplete="off" />
       </div>
-      <form id="create-form" class="create-form">
+      <div class="field">
+        <span class="form-label">What do you want to build?<span class="required">*</span></span>
+        <textarea name="idea" data-placeholder="idea" rows="5"></textarea>
+      </div>
+      <div class="form-row">
         <div class="field">
-          <span class="form-label">Project title<span class="required">*</span></span>
-          <input id="project-title" name="title" type="text" required />
+          <span class="form-label">Budget<span class="required">*</span></span>
+          <input name="budget" data-placeholder="budget" type="text" inputmode="decimal" autocomplete="off" />
         </div>
         <div class="field">
-          <span class="form-label">What do you want to build?<span class="required">*</span></span>
-          <textarea id="project-idea" name="idea" rows="5" required></textarea>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <span class="form-label">Budget<span class="required">*</span></span>
-            <input id="project-budget" name="budget" type="text" />
-          </div>
-          <div class="field">
-            <span class="form-label">Deadline</span>
-            <div class="date-field">
-              <input id="project-deadline" name="deadline" type="date" />
-              <span class="date-placeholder">mm/dd/yyyy</span>
-            </div>
+          <span class="form-label">Deadline</span>
+          <div class="date-field">
+            <input name="deadline" type="date" />
+            <span class="date-placeholder">mm/dd/yyyy</span>
           </div>
         </div>
-        <div class="field">
-          <span class="form-label">References</span>
-          <label class="upload-strip">
-            <input id="reference-input" type="file" accept="image/*" />
-            <span class="upload-icon">+</span>
-            <span id="reference-name">Add files</span>
-          </label>
-        </div>
-        <button type="submit">Generate Project</button>
-      </form>
-    </article>
+      </div>
+      <div class="field">
+        <span class="form-label">References</span>
+        <label class="upload-strip">
+          <input name="reference" type="file" accept="image/*,.pdf" />
+          <span class="upload-icon">+</span>
+          <span data-reference-name>Add files</span>
+        </label>
+      </div>
+      <button type="button" data-create-project>Generate Project</button>
+    </form>
   `;
   return section;
 }
 
-function renderDashboard() {
-  const p = project();
-  const commit = selectedCommit();
-  const section = el("div", "dashboard-view");
-  section.innerHTML = `
-    <section class="hero-grid">
-      <article class="hero-card">
-        <div class="eyebrow">Home Dashboard</div>
+function renderDashboardPage() {
+  const bundle = state.bundle!;
+  const p = bundle.project;
+  const active = currentTask();
+  const recent = commits()[0];
+  const article = document.createElement("section");
+  article.className = "dashboard-page";
+  article.innerHTML = `
+    <header class="project-head">
+      <div>
+        <span>Project Dashboard</span>
         <h1>${escapeHtml(p.name)}</h1>
-        <p class="hero-copy">${escapeHtml(p.idea)}</p>
-        <div class="hero-actions">
-          <button type="button" data-view="update">Update Project</button>
-          <button type="button" data-view="docs" class="secondary">View Documentation</button>
-        </div>
-        <div class="answer-grid">
-          <div><span>Built</span><strong>${commit?.completed[0] ?? "Project roadmap"}</strong></div>
-          <div><span>Changed</span><strong>${commit?.modified[0] ?? "No progress uploaded yet"}</strong></div>
-          <div><span>Next</span><strong>${escapeHtml(p.nextStep)}</strong></div>
-        </div>
+        <p>${escapeHtml(bundle.aiGenerated.overview || p.idea)}</p>
+      </div>
+      <button type="button" data-route="update">Update Project</button>
+    </header>
+    ${bundle.aiGenerated.fromAI ? "" : `<div class="notice inline"><span>AI analysis unavailable. Showing a basic generated roadmap; progress still saves.</span></div>`}
+    <section class="dashboard-grid">
+      <article class="metric-block"><span>Progress</span><strong>${progressPercent()}%</strong><small>${tasks().filter((task) => task.status === "completed").length} of ${tasks().length} tasks complete</small></article>
+      <article class="metric-block"><span>Budget</span><strong>$${p.budgetActual ?? 0} / $${p.budgetTarget ?? 0}</strong><small>Estimated total: $${bundle.aiGenerated.totalEstimatedCost ?? p.budgetTarget ?? 0}</small></article>
+      <article class="metric-block"><span>Current Task</span><strong>${escapeHtml(active?.title ?? "No task")}</strong><small>${escapeHtml(active?.description ?? "")}</small></article>
+      <article class="metric-block"><span>Recent Update</span><strong>${recent ? escapeHtml(recent.userNote || "Progress saved") : "No updates yet"}</strong><small>${recent ? new Date(recent.timestamp).toLocaleString() : "Upload progress when you start building."}</small></article>
+    </section>
+    <section class="content-grid">
+      <article class="section-block">
+        <div class="section-title"><span>Assembly</span><button type="button" data-route="roadmap" class="secondary">View roadmap</button></div>
+        ${renderSvg(bundle.aiGenerated.assemblyDrawing, "No assembly drawing yet.")}
       </article>
-      <aside class="status-card">
-        <div class="progress-ring" aria-label="${progress()} percent complete" style="--progress:${progress() * 3.6}deg">
-          <span>${progress()}%</span>
-        </div>
-        <div>
-          <p>Current milestone</p>
-          <h2>${escapeHtml(p.milestone)}</h2>
-        </div>
-        <div class="budget-bar">
-          <div><span>Budget</span><strong>$${p.spent} / $${p.budget}</strong></div>
-          <i><b style="width:${Math.min(100, (p.spent / p.budget) * 100)}%"></b></i>
-        </div>
-        <button type="button" data-view="roadmap" class="problem-pill">${p.problems.length} active problems</button>
-      </aside>
-      <aside class="next-card">
-        <div class="eyebrow">AI Recommended Next Step</div>
-        <h2>${escapeHtml(p.nextStep)}</h2>
-        <p>Progress updates drive this recommendation. Users follow practical build guidance without needing Git concepts.</p>
-      </aside>
+      <article class="section-block">
+        <div class="section-title"><span>Materials</span></div>
+        ${renderMaterials(bundle.aiGenerated.materials)}
+      </article>
+    </section>
+    <section class="content-grid">
+      <article class="section-block">${renderTaskDetail(selectedTask() ?? active)}</article>
+      <article class="section-block">${renderInstructions(bundle.aiGenerated.instructions)}</article>
     </section>
   `;
-  section.append(renderRoadmap(), renderHistory(), renderProblems());
-  return section;
+  return article;
 }
 
-function renderRoadmap() {
-  const section = el("section", "section-grid roadmap-section");
-  const byId = new Map(state.roadmap.map((node) => [node.id, node]));
-  const lines = edges
-    .map(([from, to]) => {
-      const start = byId.get(from);
-      const end = byId.get(to);
-      return start && end ? `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" />` : "";
-    })
-    .join("");
-
-  section.innerHTML = `
-    <article class="panel roadmap-panel">
-      <div class="section-head">
-        <div>
-          <span>Roadmap</span>
-          <h2>Build path</h2>
-        </div>
-        <button type="button" data-view="update" class="secondary">Update progress</button>
-      </div>
-      <div class="graph">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>
-        ${state.roadmap
-          .map(
-            (node) => `
-          <button class="node ${node.status} ${node.id === state.selectedNodeId ? "selected" : ""}" data-node="${node.id}" style="left:${node.x}%; top:${node.y}%" type="button">
-            <small>${statusLabel[node.status]}</small>
-            <strong>${escapeHtml(node.title)}</strong>
-            <span>${escapeHtml(node.time)}</span>
-          </button>`,
-          )
-          .join("")}
-      </div>
-    </article>
-    ${renderRoadmapDetails().outerHTML}
+function renderRoadmapPage() {
+  const page = document.createElement("section");
+  page.className = "roadmap-page";
+  page.innerHTML = `
+    <header class="page-head"><span>Roadmap</span><h1>Build path</h1><p>Statuses come from the backend. The frontend only displays and submits updates.</p></header>
+    <section class="content-grid wide-left">
+      <article class="section-block roadmap-canvas">${renderTaskGraph()}</article>
+      <article class="section-block">${renderTaskDetail(selectedTask())}</article>
+    </section>
+    <article class="section-block roadmap-list">${tasks().map(renderTaskRow).join("")}</article>
   `;
-  return section;
+  return page;
 }
 
-function renderRoadmapDetails() {
-  const node = selectedNode();
-  const aside = el("aside", "panel checklist");
-  aside.innerHTML = `
-    <div class="section-head compact">
-      <div>
-        <span>Task Details</span>
-        <h2>${escapeHtml(node.title)}</h2>
-      </div>
-    </div>
-    <div class="task-focus ${node.status}">
-      <strong>${statusLabel[node.status]}</strong>
-      <p>${escapeHtml(node.instructions)}</p>
-      <p>Materials: ${escapeHtml(node.materials)}</p>
-      <p>Estimated time: ${escapeHtml(node.time)}</p>
-    </div>
-    ${state.roadmap
-      .map(
-        (task) => `
-      <details ${task.id === state.selectedNodeId ? "open" : ""} class="${task.status}">
-        <summary>
-          <b></b>
-          <strong>${escapeHtml(task.title)}</strong>
-          <span>${statusLabel[task.status]}</span>
-        </summary>
-        <p>${escapeHtml(task.instructions)}</p>
-        <p>Materials: ${escapeHtml(task.materials)}</p>
-      </details>`,
-      )
-      .join("")}
-  `;
-  return aside;
-}
-
-function renderUpdate() {
-  const commit = selectedCommit();
-  const section = el("section", "section-grid update-grid");
-  section.innerHTML = `
-    <article class="panel update-panel">
-      <div class="section-head">
-        <div>
-          <span>Update Project</span>
-          <h2>Upload a real progress photo.</h2>
-        </div>
-      </div>
-      <form id="update-form">
-        <label class="dropzone">
-          <input id="photo-input" name="file" type="file" accept="image/*" />
-          <strong>Choose photo, camera upload, or screenshot</strong>
-          <span id="file-name">No file selected</span>
-        </label>
-        <label>
-          <span>Optional notes</span>
-          <textarea id="note-input" name="note" rows="4" placeholder="What changed since the last update?"></textarea>
-        </label>
-        <button type="submit">Analyze Progress Update</button>
-      </form>
-    </article>
-    ${commit ? renderCommitDetails(commit).outerHTML : renderEmptyDetails().outerHTML}
-    ${renderHistory("timeline-panel").outerHTML}
-  `;
-  return section;
-}
-
-function renderEmptyDetails() {
-  const panel = el("article", "panel commit-detail");
-  panel.innerHTML = `
-    <div class="section-head compact">
-      <div>
-        <span>Progress Update Details</span>
-        <h2>No uploads yet</h2>
-      </div>
-    </div>
-    <p>Upload a photo or screenshot to create the first progress update.</p>
-  `;
-  return panel;
-}
-
-function renderCommitDetails(commit: Commit) {
-  const panel = el("article", "panel commit-detail");
-  panel.innerHTML = `
-    <div class="section-head compact">
-      <div>
-        <span>Progress Update Details</span>
-        <h2>${escapeHtml(commit.title)}</h2>
-      </div>
-      <button type="button" data-view="diff" class="secondary">View diff</button>
-    </div>
-    ${commit.image ? `<img src="${commit.image}" alt="${escapeHtml(commit.title)}" />` : ""}
-    <div class="analysis-grid">
-      <div><span>Added</span><strong>${commit.added.join(", ") || "None"}</strong></div>
-      <div><span>Modified</span><strong>${commit.modified.join(", ") || "None"}</strong></div>
-      <div><span>Completed</span><strong>${commit.completed.join(", ") || "None"}</strong></div>
-      <div><span>Problems</span><strong>${commit.problems.join(", ") || "None"}</strong></div>
-    </div>
-    <p class="decision">Design decision: ${escapeHtml(commit.decisions[0] ?? "No decision recorded yet.")}</p>
-    <p class="decision">Next step: ${escapeHtml(commit.nextStep)}</p>
-  `;
-  return panel;
-}
-
-function renderHistory(extraClass = "") {
-  const section = el("article", `panel ${extraClass || "history-view"}`);
-  section.innerHTML = `
-    <div class="section-head compact">
-      <div>
-        <span>History</span>
-        <h2>Progress updates</h2>
-      </div>
-    </div>
-    <div class="timeline">
-      ${
-        state.commits.length
-          ? state.commits
-              .map(
-                (item) => `
-        <button type="button" class="timeline-item ${item.id === state.selectedCommitId ? "selected" : ""}" data-commit="${item.id}">
-          ${item.image ? `<img src="${item.image}" alt="${escapeHtml(item.title)}" />` : "<span></span>"}
-          <div>
-            <strong>${escapeHtml(item.title)}</strong>
-            <span>${escapeHtml(item.date)}</span>
-            <p>${escapeHtml(item.summary)}</p>
-          </div>
-          <b>${item.progress}%</b>
-        </button>`,
-              )
-              .join("")
-          : "<p>No progress updates yet.</p>"
-      }
+function renderTaskGraph() {
+  const all = tasks();
+  if (!all.length) return `<p>No roadmap yet.</p>`;
+  const step = 100 / Math.max(all.length, 1);
+  const lines = all.slice(1).map((_, i) => `<line x1="${step * i + step / 2}" y1="50" x2="${step * (i + 1) + step / 2}" y2="50" />`).join("");
+  return `
+    <svg class="roadmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
+    <div class="roadmap-nodes">
+      ${all.map((task, i) => `<button type="button" data-task="${task.id}" class="task-node ${task.status} ${state.selectedTaskId === task.id ? "selected" : ""}" style="left:${step * i + step / 2}%"><span>${i + 1}</span><strong>${escapeHtml(task.title)}</strong></button>`).join("")}
     </div>
   `;
-  return section;
 }
 
-function renderProblems() {
-  const panel = el("article", "panel problems-panel");
-  panel.innerHTML = `
-    <div class="section-head compact">
-      <div>
-        <span>Active Problems</span>
-        <h2>Needs attention</h2>
-      </div>
-      <button type="button" data-view="update" class="secondary">Resolve with upload</button>
-    </div>
-    <div class="doc-list">
-      ${project().problems.map((problem) => `<span>${escapeHtml(problem)}</span>`).join("") || "<span>No active problems</span>"}
-    </div>
+function renderTaskRow(task: RoadmapTask) {
+  return `
+    <button type="button" data-task="${task.id}" class="task-row ${task.status}">
+      <span>${statusText(task.status)}</span>
+      <strong>${escapeHtml(task.title)}</strong>
+      <small>${escapeHtml(task.description)}</small>
+    </button>
   `;
-  return panel;
 }
 
-function renderDiff() {
-  const current = selectedCommit();
-  if (!current) return renderEmptyDetails();
-  const previous = state.commits[state.commits.findIndex((commit) => commit.id === current.id) + 1] ?? current;
-  const section = el("section", "section-grid bottom-grid");
-  section.innerHTML = `
-    <article class="panel diff-panel">
-      <div class="section-head">
-        <div>
-          <span>Diff View</span>
-          <h2>Previous vs current physical state.</h2>
-        </div>
-        <button type="button" data-view="history" class="secondary">Choose update</button>
-      </div>
-      <div class="diff-images">
-        <figure>
-          ${previous.image ? `<img src="${previous.image}" alt="Previous project state" />` : "<div class=\"empty-image\">No previous image</div>"}
-          <figcaption>Previous</figcaption>
-        </figure>
-        <figure>
-          ${current.image ? `<img src="${current.image}" alt="Current project state" />` : "<div class=\"empty-image\">No image</div>"}
-          <i class="highlight one"></i>
-          <i class="highlight two"></i>
-          <figcaption>Current</figcaption>
-        </figure>
-      </div>
-      <div class="diff-tags">
-        ${current.added.map((item) => `<span>+ ${escapeHtml(item)}</span>`).join("")}
-        ${current.modified.map((item) => `<span>~ ${escapeHtml(item)}</span>`).join("")}
-        ${current.removed.map((item) => `<span>- ${escapeHtml(item)}</span>`).join("")}
-      </div>
-    </article>
-    ${renderCommitDetails(current).outerHTML}
+function renderTaskDetail(task?: RoadmapTask) {
+  if (!task) return `<p>No task selected.</p>`;
+  return `
+    <div class="section-title"><span>Selected Task</span><strong>${statusText(task.status)}</strong></div>
+    <h2>${escapeHtml(task.title)}</h2>
+    <p>${escapeHtml(task.description)}</p>
+    <dl class="detail-list">
+      <dt>Dependencies</dt><dd>${task.dependencies.length ? task.dependencies.map(escapeHtml).join(", ") : "None"}</dd>
+      <dt>Materials / guide</dt><dd>${escapeHtml(task.visualGuide || task.materials || "Not specified")}</dd>
+    </dl>
+    ${task.svgProfile ? renderSvg(task.svgProfile, "") : ""}
+    ${task.tips?.length ? `<div class="tips">${task.tips.map((tip) => `<span>${escapeHtml(tip)}</span>`).join("")}</div>` : ""}
+    ${task.openscadCode ? renderCode(task.openscadCode) : ""}
   `;
-  return section;
 }
 
-function renderDocs() {
-  const markdown = generateMarkdown();
-  const section = el("section", "section-grid bottom-grid");
-  section.innerHTML = `
-    <article class="panel docs-panel">
-      <div class="section-head">
-        <div>
-          <span>Documentation</span>
-          <h2>Export the build record.</h2>
-        </div>
-      </div>
-      <div class="doc-list">
-        <span>Project overview</span>
-        <span>Build timeline</span>
-        <span>Materials / BOM</span>
-        <span>Design decisions</span>
-        <span>Problems & solutions</span>
-        <span>Final specifications</span>
-      </div>
-      <div class="export-row">
-        <button type="button" id="copy-docs">Copy Markdown</button>
-        <button type="button" id="download-docs" class="secondary">Download .md</button>
-      </div>
-    </article>
-    <article class="panel doc-preview">
-      <div class="section-head compact">
-        <div>
-          <span>Preview</span>
-          <h2>Generated Markdown</h2>
-        </div>
-      </div>
-      <pre>${escapeHtml(markdown)}</pre>
+function renderUpdatePage() {
+  const analysis = state.bundle?.lastAnalysis;
+  const latest = selectedCommit();
+  const page = document.createElement("section");
+  page.className = "update-page";
+  page.innerHTML = `
+    <header class="page-head"><span>Update Project</span><h1>Upload progress</h1><p>Add a photo, screenshot, or note. Forgemap will turn it into a progress update and roadmap change.</p></header>
+    <section class="content-grid">
+      <article class="section-block">
+        <form class="update-form" novalidate>
+          <label class="dropzone">
+            <input name="photo" type="file" accept="image/*" />
+            <span class="upload-icon">+</span>
+            <strong data-photo-name>Photo, camera upload, or screenshot</strong>
+          </label>
+          <div class="field"><span class="form-label">Progress note</span><textarea name="note" rows="5"></textarea></div>
+          <button type="button" data-upload-progress>Analyze Progress Update</button>
+        </form>
+      </article>
+      <article class="section-block">
+        <div class="section-title"><span>Latest Analysis</span>${analysis?.fromAI === false ? `<strong>Fallback</strong>` : ""}</div>
+        ${latest?.mediaUrl ? `<img class="preview-image" src="${mediaUrl(latest.mediaUrl)}" alt="Latest progress" />` : `<p>No progress image yet.</p>`}
+        <h2>${escapeHtml(analysis?.summary ?? latest?.userNote ?? "No analysis yet")}</h2>
+        ${analysis?.nextStep?.svgGuide ? renderSvg(analysis.nextStep.svgGuide, "") : ""}
+        ${analysis?.nextSteps?.length ? `<ul class="plain-list">${analysis.nextSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>` : ""}
+        ${analysis?.nextStep?.openscadCode ? renderCode(analysis.nextStep.openscadCode) : ""}
+      </article>
+    </section>
+  `;
+  return page;
+}
+
+function renderHistoryPage() {
+  const page = document.createElement("section");
+  page.innerHTML = `
+    <header class="page-head"><span>History</span><h1>Progress timeline</h1><p>Every update becomes a project record with media, detected changes, and completed tasks.</p></header>
+    <article class="section-block timeline">${commits().length ? commits().map(renderCommitCard).join("") : `<p>No progress updates yet.</p>`}</article>
+  `;
+  return page;
+}
+
+function renderCommitCard(commit: Commit) {
+  return `
+    <button type="button" data-commit="${commit.id}" class="commit-card ${state.selectedCommitId === commit.id ? "selected" : ""}">
+      ${commit.mediaUrl ? `<img src="${mediaUrl(commit.mediaUrl)}" alt="Progress thumbnail" />` : `<span class="thumbnail-empty"></span>`}
+      <span><strong>${escapeHtml(commit.userNote || "Progress update")}</strong><small>${new Date(commit.timestamp).toLocaleString()}</small><small>${escapeHtml(commit.detectedChanges.added.concat(commit.detectedChanges.modified).join(", ") || "Saved update")}</small></span>
+      <b>${commit.completedTasks.length} done</b>
+    </button>
+  `;
+}
+
+function renderDiffPage() {
+  const [latest, previous] = commits();
+  const added = latest?.detectedChanges.added ?? [];
+  const modified = latest?.detectedChanges.modified ?? [];
+  const removed = latest?.detectedChanges.removed ?? [];
+  const page = document.createElement("section");
+  page.innerHTML = `
+    <header class="page-head"><span>Diff</span><h1>What changed?</h1><p>Added, removed, and modified items from the latest progress update.</p></header>
+    <section class="content-grid">
+      <article class="section-block diff-images">
+        <figure>${previous?.mediaUrl ? `<img src="${mediaUrl(previous.mediaUrl)}" />` : `<div class="empty-image">No previous image</div>`}<figcaption>Previous</figcaption></figure>
+        <figure>${latest?.mediaUrl ? `<img src="${mediaUrl(latest.mediaUrl)}" />` : `<div class="empty-image">No current image</div>`}<figcaption>Current</figcaption></figure>
+      </article>
+      <article class="section-block diff-lists">
+        ${renderDiffList("Added", added, "added")}
+        ${renderDiffList("Modified", modified, "modified")}
+        ${renderDiffList("Removed", removed, "removed")}
+      </article>
+    </section>
+  `;
+  return page;
+}
+
+function renderDocsPage() {
+  const doc = state.bundle?.documentation ?? fallbackDocumentation();
+  const page = document.createElement("section");
+  page.innerHTML = `
+    <header class="page-head"><span>Documentation</span><h1>${escapeHtml(doc.title)}</h1><p>${escapeHtml(doc.overview)}</p><button type="button" data-generate-docs>Refresh Docs</button></header>
+    <article class="document-page section-block">
+      <h2>Materials</h2>${renderMaterials(doc.materials)}
+      <h2>Build Timeline</h2>${doc.commitHistory.map((item) => `<section><strong>${new Date(item.timestamp).toLocaleString()}</strong><p>${escapeHtml(item.summary)}</p><ul>${item.changes.map((change) => `<li>${escapeHtml(change)}</li>`).join("")}</ul></section>`).join("")}
+      <h2>Design Decisions</h2>${doc.designDecisions.map((d) => `<p><strong>${escapeHtml(d.decision)}</strong> — ${escapeHtml(d.reason)} ${escapeHtml(d.consequence)}</p>`).join("")}
+      <h2>Reproduction Steps</h2><ol>${doc.reproductionSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
     </article>
   `;
-  return section;
+  return page;
 }
 
-function generateMarkdown() {
-  const p = project();
-  return `# ${p.name}
+function renderMaterials(materials: Material[]) {
+  if (!materials.length) return `<p>No materials yet.</p>`;
+  return `<div class="materials-list">${materials.map((m) => `<div><strong>${escapeHtml(m.item)}</strong><span>Qty ${m.quantity}</span><span>$${m.estimatedCost ?? m.actualCost ?? 0}</span></div>`).join("")}</div>`;
+}
 
-${p.idea}
+function renderInstructions(instructions: string[]) {
+  return `<div class="section-title"><span>Instructions</span></div><ul class="plain-list">${instructions.map((item) => `<li class="${item.trim().startsWith("⚠️") ? "warning" : ""}">${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
 
-## Current Status
-- Progress: ${progress()}%
-- Current milestone: ${p.milestone}
-- Next step: ${p.nextStep}
-- Budget: $${p.spent} / $${p.budget}
+function renderSvg(svg?: string | null, fallback = "No SVG available.") {
+  return svg ? `<div class="svg-box">${svg}</div>` : `<div class="svg-empty">${fallback}</div>`;
+}
 
-## Roadmap
-${state.roadmap.map((task) => `- ${statusLabel[task.status]}: ${task.title} (${task.time})`).join("\n")}
+function renderCode(code: string) {
+  const escaped = escapeHtml(code);
+  return `<div class="code-box"><button type="button" data-copy-code="${encodeURIComponent(code)}" class="secondary">Copy OpenSCAD</button><pre>${escaped}</pre></div>`;
+}
 
-## Build Timeline
-${state.commits
-  .map(
-    (commit) => `### ${commit.title}
-${commit.date}
+function renderDiffList(title: string, values: string[], tone: string) {
+  return `<div class="diff-list ${tone}"><strong>${title}</strong>${values.length ? values.map((v) => `<span>${escapeHtml(v)}</span>`).join("") : `<small>None</small>`}</div>`;
+}
 
-${commit.summary}
-
-Note: ${commit.note}
-Added: ${commit.added.join(", ") || "None"}
-Modified: ${commit.modified.join(", ") || "None"}
-Problems: ${commit.problems.join(", ") || "None"}
-Decision: ${commit.decisions.join(", ") || "None"}`,
-  )
-  .join("\n\n")}
-`;
+function statusText(status: RoadmapStatus) {
+  return status.replace("_", " ");
 }
 
 function bindActions() {
+  document.querySelectorAll<HTMLElement>("[data-route]").forEach((button) => button.addEventListener("click", () => setRoute(button.dataset.route as Route)));
+  document.querySelector("#new-project")?.addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY);
+    Object.assign(state, emptyState());
+    history.pushState(null, "", "#create");
+    render();
+  });
   document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea").forEach((control) => {
     control.addEventListener("click", (event) => event.stopPropagation());
     control.addEventListener("keydown", (event) => event.stopPropagation());
   });
-
-  document.querySelectorAll<HTMLElement>("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const nextView = button.dataset.view as View;
-      state.view = state.project ? nextView : "create";
-      render();
-    });
-  });
-
-  document.querySelectorAll<HTMLElement>("[data-node]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedNodeId = button.dataset.node!;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll<HTMLElement>("[data-commit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedCommitId = button.dataset.commit!;
-      state.view = "update";
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelector("#reset-project")?.addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_KEY);
-    Object.assign(state, structuredClone(emptyState));
-    render();
-  });
-
-  bindCreateForm();
-  bindUpdateForm();
-  bindDocs();
+  bindCreateForms();
+  bindUploadForm();
   bindDatePlaceholder();
+  bindPlaceholderLoops();
+  bindTaskAndCommitSelection();
+  bindCopiesAndDocs();
 }
 
-function bindCreateForm() {
-  const form = document.querySelector<HTMLFormElement>("#create-form");
-  const reference = document.querySelector<HTMLInputElement>("#reference-input");
-  const referenceName = document.querySelector<HTMLElement>("#reference-name");
-  startPlaceholderLoops();
-
-  reference?.addEventListener("change", () => {
-    referenceName!.textContent = reference.files?.[0]?.name ?? "Optional reference image.";
+function bindCreateForms() {
+  document.querySelectorAll<HTMLFormElement>(".create-form").forEach((form) => {
+    const file = form.querySelector<HTMLInputElement>('input[type="file"]');
+    const name = form.querySelector<HTMLElement>("[data-reference-name]");
+    file?.addEventListener("change", () => {
+      if (name) name.textContent = file.files?.[0]?.name ?? "Add files";
+    });
+    form.querySelector("[data-create-project]")?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await createProject(form);
+    });
+    form.addEventListener("submit", (event) => event.preventDefault());
   });
+}
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
+async function createProject(form: HTMLFormElement) {
+  const data = new FormData(form);
+  const title = String(data.get("title") || "").trim();
+  const idea = String(data.get("idea") || "").trim();
+  const budget = Number(String(data.get("budget") || "").replace(/[^0-9.]/g, ""));
+  if (!title || !idea || !budget) {
+    showNotice("Add a title, build description, and budget first.");
+    return;
+  }
+  state.busy = "Generating your project plan...";
+  render();
+  try {
+    const result = await api<{ project: Project; aiGenerated: AiGenerated }>("/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idea, budget, deadline: String(data.get("deadline") || "") }),
+    });
+    state.bundle = { ...result, commits: [] };
+    state.notice = result.aiGenerated.fromAI ? "" : "AI unavailable. Showing fallback project tracking.";
+  } catch {
+    state.bundle = mockProject(title, idea, budget, String(data.get("deadline") || ""));
+    state.notice = "Backend is not running yet. Using local demo data that matches the integration contract.";
+  }
+  state.selectedTaskId = state.bundle.project.roadmapTasks[0]?.id ?? "";
+  state.selectedCommitId = "";
+  state.route = "dashboard";
+  state.busy = "";
+  history.pushState(null, "", "#dashboard");
+  saveState();
+  render();
+}
+
+function bindUploadForm() {
+  const form = document.querySelector<HTMLFormElement>(".update-form");
+  if (!form || !state.bundle) return;
+  const file = form.querySelector<HTMLInputElement>('input[name="photo"]');
+  const name = form.querySelector<HTMLElement>("[data-photo-name]");
+  file?.addEventListener("change", () => {
+    if (name) name.textContent = file.files?.[0]?.name ?? "Photo, camera upload, or screenshot";
+  });
+  form.querySelector("[data-upload-progress]")?.addEventListener("click", async () => {
     const data = new FormData(form);
-    const title = String(data.get("title") || "").trim();
-    const idea = String(data.get("idea") || "").trim();
-    const budget = Number(String(data.get("budget") || "0").replace(/[^0-9.]/g, "")) || 0;
-    if (!title || !idea || !budget) {
-      toast("Add a title, build description, and budget first.");
+    const photo = file?.files?.[0];
+    const note = String(data.get("note") || "").trim();
+    if (!photo && !note) {
+      showNotice("Add a photo or a note before analyzing progress.");
       return;
     }
-
-    const roadmap = generateRoadmap(idea);
-
-    state.project = {
-      id: `proj_${crypto.randomUUID()}`,
-      name: title,
-      idea,
-      budget,
-      spent: 0,
-      skill: "Not specified",
-      deadline: String(data.get("deadline") || "No deadline"),
-      milestone: roadmap[0].title,
-      nextStep: roadmap[0].instructions,
-      problems: [],
-    };
-    state.roadmap = roadmap;
-    state.commits = [
-      {
-        id: `commit_${crypto.randomUUID()}`,
-        title: "Project generated",
-        date: formatDate(),
-        progress: 8,
-        note: idea,
-        summary: "Roadmap, materials, budget, and first instructions were generated.",
-        added: ["Project roadmap", "Budget", "Initial documentation"],
-        modified: [],
-        removed: [],
-        completed: [],
-        decisions: ["Project created from the initial build description."],
-        problems: [],
-        nextStep: state.project.nextStep,
-      },
-    ];
-    state.selectedCommitId = state.commits[0].id;
-    state.selectedNodeId = roadmap[0].id;
-    state.view = "dashboard";
+    if (photo) data.set("photo", photo);
+    state.busy = photo ? "Analyzing your progress..." : "Saving progress update...";
+    render();
+    try {
+      const result = await api<{ commit: Commit; analysis: CommitAnalysis }>(`/projects/${state.bundle!.project.id}/commits`, { method: "POST", body: data });
+      applyCommit(result.commit, result.analysis);
+    } catch {
+      applyCommit(mockCommit(note, photo), mockAnalysis(photo));
+      state.notice = "Backend is not running yet. Progress was saved locally for the demo.";
+    }
+    state.busy = "";
+    state.route = "update";
     saveState();
-    toast("Project created.");
     render();
   });
 }
 
-function startPlaceholderLoops() {
-  const fields = [
-    {
-      el: document.querySelector<HTMLInputElement>("#project-title"),
-      phrases: ["Small rover", "Desk air quality monitor", "Solar phone charger", "Hydroponic grow box"],
-      speed: 0.62,
-    },
-    {
-      el: document.querySelector<HTMLTextAreaElement>("#project-idea"),
-      phrases: [
-        "I want to build a small rover that can avoid obstacles.",
-        "I want to use spare sensors to track room temperature.",
-        "I want to make a portable charger for camping.",
-        "I want to turn a rough sketch into a working prototype.",
-      ],
-      speed: 1,
-    },
-    {
-      el: document.querySelector<HTMLInputElement>("#project-budget"),
-      phrases: ["$50", "$100", "$200", "$500"],
-      speed: 0.48,
-    },
-  ].filter(
-    (field): field is { el: HTMLInputElement | HTMLTextAreaElement; phrases: string[]; speed: number } =>
-      Boolean(field.el),
-  );
+function applyCommit(commit: Commit, analysis: CommitAnalysis) {
+  if (!state.bundle) return;
+  state.bundle.commits = [commit, ...state.bundle.commits.filter((item) => item.id !== commit.id)];
+  state.bundle.lastAnalysis = analysis;
+  state.selectedCommitId = commit.id;
+  if (commit.roadmapState?.length) {
+    state.bundle.project.roadmapTasks = state.bundle.project.roadmapTasks.map((task) => {
+      const updated = commit.roadmapState?.find((item) => item.id === task.id || item.title === task.title);
+      return updated ? { ...task, status: updated.status } : task;
+    });
+  } else {
+    advanceLocalRoadmap();
+  }
+}
 
+function bindDatePlaceholder() {
+  document.querySelectorAll<HTMLInputElement>('input[type="date"]').forEach((input) => {
+    const update = () => input.classList.toggle("has-value", Boolean(input.value));
+    input.addEventListener("input", update);
+    input.addEventListener("change", update);
+    update();
+  });
+}
+
+function bindTaskAndCommitSelection() {
+  document.querySelectorAll<HTMLElement>("[data-task]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedTaskId = button.dataset.task ?? state.selectedTaskId;
+    saveState();
+    render();
+  }));
+  document.querySelectorAll<HTMLElement>("[data-commit]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedCommitId = button.dataset.commit ?? state.selectedCommitId;
+    setRoute("update");
+  }));
+}
+
+function bindCopiesAndDocs() {
+  document.querySelectorAll<HTMLElement>("[data-copy-code]").forEach((button) => button.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(decodeURIComponent(button.dataset.copyCode ?? ""));
+    showNotice("OpenSCAD code copied.");
+  }));
+  document.querySelector("[data-generate-docs]")?.addEventListener("click", async () => {
+    if (!state.bundle) return;
+    state.busy = "Generating documentation...";
+    render();
+    try {
+      const result = await api<{ documentation: Documentation }>(`/projects/${state.bundle.project.id}/documentation`);
+      state.bundle.documentation = result.documentation;
+    } catch {
+      state.bundle.documentation = fallbackDocumentation();
+      state.notice = "Backend is not running yet. Generated local documentation preview.";
+    }
+    state.busy = "";
+    saveState();
+    render();
+  });
+}
+
+function bindPlaceholderLoops() {
+  const fields = [
+    { el: document.querySelector<HTMLInputElement>('[data-placeholder="title"]'), speed: 0.62, phrases: ["Small rover", "Desk air monitor", "Solar charger", "Hydroponic box"] },
+    { el: document.querySelector<HTMLTextAreaElement>('[data-placeholder="idea"]'), speed: 1, phrases: ["I want to build a small rover that avoids obstacles.", "I want to use spare sensors to track room temperature.", "I want to make a portable charger for camping.", "I want to turn a sketch into a working prototype."] },
+    { el: document.querySelector<HTMLInputElement>('[data-placeholder="budget"]'), speed: 0.48, phrases: ["$50", "$100", "$200", "$500"] },
+  ].filter((item): item is { el: HTMLInputElement | HTMLTextAreaElement; speed: number; phrases: string[] } => Boolean(item.el));
   if (!fields.length) return;
   let phraseIndex = 0;
   let charIndex = 0;
   let deleting = false;
-
   const tick = () => {
-    fields.forEach(({ el, phrases, speed }) => {
-      el.placeholder = phrases[phraseIndex].slice(0, Math.floor(charIndex * speed));
-    });
-
-    const longestPhraseLength = Math.max(...fields.map(({ phrases }) => phrases[phraseIndex].length));
-
+    fields.forEach(({ el, phrases, speed }) => (el.placeholder = phrases[phraseIndex].slice(0, Math.floor(charIndex * speed))));
+    const longest = Math.max(...fields.map(({ phrases }) => phrases[phraseIndex].length));
     if (deleting) {
       charIndex -= 1;
       if (charIndex <= 0) {
@@ -760,228 +687,95 @@ function startPlaceholderLoops() {
       }
     } else {
       charIndex += 1;
-      if (charIndex > longestPhraseLength) {
+      if (charIndex > longest) {
         deleting = true;
-        const holdTimer = window.setTimeout(tick, 1200);
-        placeholderTimers.push(holdTimer);
+        placeholderTimers.push(window.setTimeout(tick, 1000));
         return;
       }
     }
-
-    const timer = window.setTimeout(tick, deleting ? 28 : 42);
-    placeholderTimers.push(timer);
+    placeholderTimers.push(window.setTimeout(tick, deleting ? 28 : 42));
   };
-
   tick();
 }
 
-function bindDatePlaceholder() {
-  const input = document.querySelector<HTMLInputElement>("#project-deadline");
-  if (!input) return;
-  const update = () => input.classList.toggle("has-value", Boolean(input.value));
-  input.addEventListener("input", update);
-  input.addEventListener("change", update);
-  update();
+function showNotice(message: string) {
+  state.notice = message;
+  saveState();
+  render();
 }
 
-function bindUpdateForm() {
-  const form = document.querySelector<HTMLFormElement>("#update-form");
-  const input = document.querySelector<HTMLInputElement>("#photo-input");
-  const fileName = document.querySelector<HTMLElement>("#file-name");
-
-  input?.addEventListener("change", () => {
-    fileName!.textContent = input.files?.[0]?.name ?? "No file selected";
-  });
-
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const file = input?.files?.[0];
-    if (!file) {
-      toast("Choose a photo or screenshot first.");
-      return;
-    }
-
-    const note = String(new FormData(form).get("note") || "Uploaded a progress photo.");
-    const image = URL.createObjectURL(file);
-    const commit = makeCommit(note, image);
-    state.commits.unshift(commit);
-    state.selectedCommitId = commit.id;
-    advanceRoadmap();
-    const p = project();
-    p.spent = p.budget ? Math.min(p.budget, p.spent + Math.ceil(p.budget * 0.08)) : p.spent;
-    p.milestone = selectedNode().title;
-    p.nextStep = commit.nextStep;
-    p.problems = commit.problems;
-    state.view = "update";
-    saveState();
-
-    try {
-      const payload = new FormData(form);
-      payload.set("file", file);
-      await fetch(`${API_BASE}/projects/${p.id}/commits`, { method: "POST", body: payload });
-    } catch {
-      // Local-first behavior keeps the frontend usable without the backend.
-    }
-
-    toast("Progress update added.");
-    render();
-  });
-}
-
-function bindDocs() {
-  document.querySelector("#copy-docs")?.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(generateMarkdown());
-    toast("Markdown copied.");
-  });
-
-  document.querySelector("#download-docs")?.addEventListener("click", () => {
-    const blob = new Blob([generateMarkdown()], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${project().name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  });
-}
-
-function titleFromIdea(idea: string) {
-  return idea
-    .replace(/^i want to build\s+/i, "")
-    .replace(/^build\s+/i, "")
-    .replace(/\s+(under|for less than|by|before)\s+.+$/i, "")
-    .split(/\s+/)
-    .slice(0, 5)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function generateRoadmap(idea: string): RoadmapNode[] {
-  const objectName = titleFromIdea(idea).toLowerCase() || "project";
-  return [
-    {
-      id: "plan",
-      title: "Define build requirements",
-      status: "current",
-      x: 7,
-      y: 50,
-      time: "20 min",
-      materials: "Project idea, constraints, reference notes",
-      instructions: `Confirm what the ${objectName} must do, what success looks like, and what constraints matter.`,
-    },
-    {
-      id: "materials",
-      title: "Gather materials",
-      status: "upcoming",
-      x: 23,
-      y: 50,
-      time: "30-60 min",
-      materials: "Parts, tools, fasteners, safety equipment",
-      instructions: "Collect the required materials and upload a photo so Physical Git can verify what is available.",
-    },
-    {
-      id: "first-build",
-      title: "Assemble first version",
-      status: "upcoming",
-      x: 39,
-      y: 50,
-      time: "1-2 hr",
-      materials: "Core components",
-      instructions: "Build the simplest working version before adding polish or optional branches.",
-    },
-    {
-      id: "core-assembly",
-      title: "Core assembly",
-      status: "upcoming",
-      x: 55,
-      y: 50,
-      time: "1 hr",
-      materials: "Primary structure and functional parts",
-      instructions: "Connect the main functional pieces and upload a clear progress photo.",
-    },
-    {
-      id: "branch-a",
-      title: "Feature branch",
-      status: "upcoming",
-      x: 72,
-      y: 25,
-      time: "45 min",
-      materials: "Optional feature parts",
-      instructions: "Add the first optional feature only after the core assembly is stable.",
-    },
-    {
-      id: "branch-b",
-      title: "Enclosure branch",
-      status: "upcoming",
-      x: 72,
-      y: 74,
-      time: "1 hr",
-      materials: "Case, mount, frame, or finishing materials",
-      instructions: "Build the enclosure or final physical mounting once dimensions are confirmed.",
-    },
-    {
-      id: "test",
-      title: "Test and document",
-      status: "blocked",
-      x: 90,
-      y: 50,
-      time: "30 min",
-      materials: "Final photos, test notes, measurements",
-      instructions: "Test the finished build, resolve visible issues, and generate documentation.",
-    },
+function mockProject(title: string, idea: string, budget: number, deadline: string): ProjectBundle {
+  const id = uid("proj");
+  const roadmapTasks: RoadmapTask[] = [
+    task(id, "Define requirements", "Confirm constraints, target dimensions, and success criteria.", "in_progress", 1, []),
+    task(id, "Gather materials", "Collect parts, tools, and reference measurements.", "not_started", 2, ["Define requirements"]),
+    task(id, "Build first version", "Assemble the simplest physical version before adding optional features.", "blocked", 3, ["Gather materials"]),
+    task(id, "Test and document", "Upload final photos, measurements, and problems solved.", "blocked", 4, ["Build first version"]),
   ];
-}
-
-function makeCommit(note: string, image: string): Commit {
-  const nextProgress = Math.min(100, progress() + 14);
-  const currentTask = selectedNode();
+  roadmapTasks[0].svgProfile = `<svg viewBox="0 0 240 140"><rect x="36" y="42" width="168" height="56" rx="10" fill="none" stroke="currentColor"/><circle cx="72" cy="70" r="14" fill="none" stroke="currentColor"/><path d="M100 70h70" stroke="currentColor"/></svg>`;
+  roadmapTasks[0].openscadCode = `// Starter block for ${title}\n$fn=64;\ncube([60, 40, 8], center=true);`;
   return {
-    id: `commit_${crypto.randomUUID()}`,
-    title: `${currentTask.title} update`,
-    date: formatDate(),
-    progress: nextProgress,
-    image,
-    note,
-    summary: "Physical Git analyzed the uploaded progress image and updated the build record.",
-    added: ["New progress evidence"],
-    modified: ["Roadmap status", currentTask.title],
-    removed: [],
-    completed: nextProgress > 20 ? [currentTask.title] : [],
-    decisions: [note],
-    problems: nextProgress > 70 ? [] : ["Upload another angle after completing the next task."],
-    nextStep:
-      nextProgress >= 100
-        ? "Generate final documentation."
-        : "Complete the highlighted roadmap task and upload the next progress photo.",
+    project: { id, name: title, idea, budgetTarget: budget, budgetActual: 0, skillLevel: null, createdAt: new Date().toISOString(), roadmapTasks },
+    aiGenerated: {
+      overview: `A practical build plan for: ${idea}`,
+      assemblyDrawing: `<svg viewBox="0 0 320 180"><rect x="48" y="58" width="224" height="64" rx="12" fill="none" stroke="currentColor"/><path d="M80 122l40 32h80l40-32" fill="none" stroke="currentColor"/><text x="160" y="94" text-anchor="middle" fill="currentColor" font-size="14">${escapeHtml(title)}</text></svg>`,
+      materials: [{ item: "Core materials", quantity: 1, estimatedCost: Math.max(1, Math.round(budget * 0.6)) }, { item: "Fasteners / consumables", quantity: 1, estimatedCost: Math.max(1, Math.round(budget * 0.15)) }],
+      totalEstimatedCost: Math.round(budget * 0.75),
+      tools: ["Measuring tool", "Basic hand tools", "Camera for progress updates"],
+      instructions: ["Confirm the build constraints.", "Gather materials before assembly.", "⚠️ Use appropriate safety gear for cutting, soldering, printing, or power tools."],
+      fromAI: false,
+    },
+    commits: [],
   };
 }
 
-function advanceRoadmap() {
-  const currentIndex = state.roadmap.findIndex((node) => node.status === "current");
-  state.roadmap = state.roadmap.map((node, index) => {
-    if (index <= currentIndex) return { ...node, status: "completed" };
-    if (index === currentIndex + 1) return { ...node, status: "current" };
-    if (node.status === "blocked" && progress() > 60) return { ...node, status: "upcoming" };
-    return node;
+function task(projectId: string, title: string, description: string, status: RoadmapStatus, order: number, dependencies: string[]): RoadmapTask {
+  return { id: uid("task"), projectId, title, description, status, dependencies, order, visualGuide: description, tips: ["Upload a photo after this step", "Keep notes short and specific"], openscadCode: null, svgProfile: null };
+}
+
+function mockCommit(note: string, photo?: File): Commit {
+  const p = project();
+  const active = currentTask();
+  return {
+    id: uid("commit"),
+    projectId: p.id,
+    timestamp: new Date().toISOString(),
+    mediaUrl: photo ? URL.createObjectURL(photo) : null,
+    userNote: note || "Progress update",
+    detectedChanges: { added: [active?.title ?? "Visible progress"], removed: [], modified: ["Roadmap state"] },
+    projectState: { components: [active?.title ?? "Progress evidence"], completedTasks: active ? [active.title] : [], remainingTasks: tasks().filter((task) => task.id !== active?.id).map((task) => task.title), problems: [] },
+    completedTasks: active ? [active.title] : [],
+    roadmapState: active ? [{ id: active.id, title: active.title, status: "completed" }] : [],
+  };
+}
+
+function mockAnalysis(photo?: File): CommitAnalysis {
+  const next = tasks().find((task) => task.status === "not_started" || task.status === "blocked");
+  return { summary: photo ? "Progress image saved locally. Backend AI will replace this with visual analysis after merge." : "Progress note saved locally.", nextSteps: next ? [`Next: ${next.title}`] : ["Generate documentation."], nextStep: next ? { taskId: next.id, reason: "Previous step is complete, so this is the next dependency-safe task.", svgGuide: next.svgProfile ?? null, openscadCode: next.openscadCode ?? null } : null, fromAI: false };
+}
+
+function advanceLocalRoadmap() {
+  if (!state.bundle) return;
+  const currentIndex = state.bundle.project.roadmapTasks.findIndex((task) => task.status === "in_progress");
+  state.bundle.project.roadmapTasks = state.bundle.project.roadmapTasks.map((task, index) => {
+    if (index <= currentIndex) return { ...task, status: "completed" };
+    if (index === currentIndex + 1) return { ...task, status: "in_progress" };
+    return task.status === "blocked" && index <= currentIndex + 2 ? { ...task, status: "not_started" } : task;
   });
-  const next = state.roadmap.find((node) => node.status === "current") ?? state.roadmap[state.roadmap.length - 1];
-  state.selectedNodeId = next.id;
 }
 
-function formatDate() {
-  return new Intl.DateTimeFormat("en", {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  }).format(new Date());
+function fallbackDocumentation(): Documentation {
+  const bundle = state.bundle!;
+  return { title: bundle.project.name, overview: bundle.aiGenerated.overview, finalResult: "Build in progress.", materials: bundle.aiGenerated.materials, totalCost: bundle.project.budgetActual ?? bundle.aiGenerated.totalEstimatedCost, tools: bundle.aiGenerated.tools, originalRoadmap: bundle.project.roadmapTasks.map((task) => task.title), finalRoadmap: bundle.project.roadmapTasks.map((task) => `${task.title} (${task.status})`), commitHistory: bundle.commits.map((commit) => ({ timestamp: commit.timestamp, summary: commit.userNote || "Progress update", changes: commit.detectedChanges.added.concat(commit.detectedChanges.modified) })), designDecisions: [{ decision: "Track work through progress updates", reason: "Physical projects need a reliable build record", consequence: "Documentation can be generated from history" }], problemsSolved: [], reproductionSteps: bundle.project.roadmapTasks.map((task) => task.description) };
 }
 
-function toast(message: string) {
-  document.querySelector(".toast")?.remove();
-  const node = el("div", "toast", message);
-  document.body.append(node);
-  window.setTimeout(() => node.remove(), 3200);
-}
+window.addEventListener("popstate", () => {
+  const hash = location.hash.replace("#", "");
+  const routes: Route[] = ["create", "dashboard", "roadmap", "update", "history", "diff", "docs"];
+  if (routes.includes(hash as Route)) state.route = hash as Route;
+  else if (state.bundle) state.route = "dashboard";
+  else state.route = "create";
+  render();
+});
 
 render();
