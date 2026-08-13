@@ -290,6 +290,7 @@ function renderCreatePage(compact = false) {
           <input name="reference" type="file" accept="image/*,.pdf" />
           <span class="upload-icon">+</span>
           <span data-reference-name>Add files</span>
+          <small class="drop-hint">Drag and drop files here, or click to browse</small>
         </label>
       </div>
       <button type="button" data-create-project>Generate Project</button>
@@ -406,6 +407,7 @@ function renderUpdatePage() {
             <input name="photo" type="file" accept="image/*" />
             <span class="upload-icon">+</span>
             <strong data-photo-name>Photo, camera upload, or screenshot</strong>
+            <small class="drop-hint">Drag and drop files here, or click to browse</small>
           </label>
           <div class="field"><span class="form-label">Progress note</span><textarea name="note" rows="5"></textarea></div>
           <button type="button" data-upload-progress>Analyze Progress Update</button>
@@ -521,6 +523,7 @@ function bindActions() {
   });
   bindCreateForms();
   bindUploadForm();
+  bindDragAndDrop();
   bindDatePlaceholder();
   bindPlaceholderLoops();
   bindTaskAndCommitSelection();
@@ -605,6 +608,30 @@ function bindUploadForm() {
     state.route = "update";
     saveState();
     render();
+  });
+}
+
+function bindDragAndDrop() {
+  document.querySelectorAll<HTMLElement>(".dropzone, .upload-strip").forEach((zone) => {
+    const fileInput = zone.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!fileInput) return;
+
+    const prevent = (e: Event) => { e.preventDefault(); e.stopPropagation(); };
+
+    zone.addEventListener("dragenter", (e) => { prevent(e); zone.classList.add("drag-over"); });
+    zone.addEventListener("dragover", (e) => { prevent(e); zone.classList.add("drag-over"); });
+    zone.addEventListener("dragleave", (e) => { prevent(e); zone.classList.remove("drag-over"); });
+    zone.addEventListener("drop", (e: DragEvent) => {
+      prevent(e);
+      zone.classList.remove("drag-over");
+      const files = e.dataTransfer?.files;
+      if (!files?.length) return;
+
+      const dt = new DataTransfer();
+      dt.items.add(files[0]);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
   });
 }
 

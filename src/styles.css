@@ -40,6 +40,8 @@ input[type="date"].has-value, input[type="date"]:focus { color: #e7eaf0; }
 input[type="date"]:focus + .date-placeholder, input[type="date"].has-value + .date-placeholder { display: none; }
 .upload-strip, .dropzone { min-height: 132px; display: grid; place-items: center; border: 1px dashed #3b4658; border-radius: 8px; background: #10141b; color: #7f8a9b; text-align: center; cursor: pointer; padding: 18px; }
 .upload-strip input, .dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.upload-strip.drag-over, .dropzone.drag-over { border-color: #4f7cff; background: rgba(79, 124, 255, 0.06); box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.15); }
+.drop-hint { display: block; margin-top: 6px; font-size: 0.75rem; color: #7f8a9b; font-weight: 400; }
 .upload-icon { width: 34px; height: 34px; display: grid; place-items: center; margin-bottom: 8px; border: 1px solid #3b4658; border-radius: 50%; color: #b4bdca; font-size: 1.4rem; }
 .notice, .busy { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 22px; border: 1px solid #303744; border-radius: 8px; background: #10141b; color: #d7dce5; padding: 12px 14px; }
 .notice.inline { margin: 0 0 22px; }
