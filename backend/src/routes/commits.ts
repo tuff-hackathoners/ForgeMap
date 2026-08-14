@@ -68,6 +68,7 @@ router.post('/:id/commits', upload.single('photo'), async (req: Request, res: Re
       detectedChanges: analysis.detectedChanges,
       projectState: analysis.projectState,
       completedTasks: analysis.completedTasks,
+      feedback: analysis.feedback ?? undefined,
       roadmapState,
     });
 
@@ -84,6 +85,7 @@ router.post('/:id/commits', upload.single('photo'), async (req: Request, res: Re
         summary: analysis.summary,
         nextSteps: analysis.nextSteps,
         nextStep: analysis.nextStep || null,
+        feedback: analysis.feedback || null,
         fromAI,
       },
     });

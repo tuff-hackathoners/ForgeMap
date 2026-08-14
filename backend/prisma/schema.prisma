@@ -32,6 +32,7 @@ model Commit {
   detectedChanges String?  @map("detected_changes") // JSON string
   projectState    String?  @map("project_state")     // JSON string
   completedTasks  String?  @map("completed_tasks")   // JSON string
+  feedback        String?  @map("feedback")          // JSON string: { overallAssessment, issues, positiveNotes, alignmentScore }
   roadmapState    String?  @map("roadmap_state")     // JSON string
 
   project Project @relation(fields: [projectId], references: [id])

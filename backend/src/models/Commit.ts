@@ -8,6 +8,7 @@ export interface CreateCommitInput {
   detectedChanges?: object;
   projectState?: object;
   completedTasks?: string[];
+  feedback?: object;
   roadmapState?: object;
 }
 
@@ -26,6 +27,7 @@ export const CommitModel = {
         detectedChanges: input.detectedChanges ? JSON.stringify(input.detectedChanges) : null,
         projectState: input.projectState ? JSON.stringify(input.projectState) : null,
         completedTasks: input.completedTasks ? JSON.stringify(input.completedTasks) : null,
+        feedback: input.feedback ? JSON.stringify(input.feedback) : null,
         roadmapState: input.roadmapState ? JSON.stringify(input.roadmapState) : null,
       },
     });
@@ -42,6 +44,7 @@ export const CommitModel = {
         detectedChanges: input.detectedChanges ? JSON.stringify(input.detectedChanges) : null,
         projectState: input.projectState ? JSON.stringify(input.projectState) : null,
         completedTasks: input.completedTasks ? JSON.stringify(input.completedTasks) : null,
+        feedback: input.feedback ? JSON.stringify(input.feedback) : null,
         roadmapState: input.roadmapState ? JSON.stringify(input.roadmapState) : null,
       },
     });
@@ -65,6 +68,7 @@ export const CommitModel = {
       detectedChanges: commit.detectedChanges ? JSON.parse(commit.detectedChanges) : null,
       projectState: commit.projectState ? JSON.parse(commit.projectState) : null,
       completedTasks: commit.completedTasks ? JSON.parse(commit.completedTasks) : null,
+      feedback: commit.feedback ? JSON.parse(commit.feedback) : null,
       roadmapState: commit.roadmapState ? JSON.parse(commit.roadmapState) : null,
     };
   },

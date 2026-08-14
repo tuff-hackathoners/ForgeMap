@@ -8,6 +8,19 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5000';
 
 // ─── Types ───
 
+export interface FeedbackIssue {
+  description: string;
+  severity: 'critical' | 'warning' | 'suggestion';
+  fix: string;
+}
+
+export interface Feedback {
+  overallAssessment: string;
+  issues: FeedbackIssue[];
+  positiveNotes: string[];
+  alignmentScore: number;
+}
+
 export interface ProgressAnalysisResult {
   detectedChanges: {
     added: string[];
@@ -23,6 +36,7 @@ export interface ProgressAnalysisResult {
   completedTasks: string[];
   nextSteps: string[];
   summary: string;
+  feedback?: Feedback;
   nextStep?: {
     taskId: string;
     reason: string;
@@ -283,7 +297,23 @@ function translateAIProgressResponse(raw: any): ProgressAnalysisResult | null {
       };
     }
 
-    return { detectedChanges, projectState, completedTasks, nextSteps, summary, nextStep };
+    // Extract feedback if present
+    let feedback: ProgressAnalysisResult['feedback'] = undefined;
+    const rawFeedback = raw.feedback;
+    if (rawFeedback && typeof rawFeedback === 'object') {
+      feedback = {
+        overallAssessment: rawFeedback.overall_assessment || rawFeedback.overallAssessment || '',
+        issues: (rawFeedback.issues || []).map((issue: any) => ({
+          description: issue.description || '',
+          severity: ['critical', 'warning', 'suggestion'].includes(issue.severity) ? issue.severity : 'suggestion',
+          fix: issue.fix || '',
+        })),
+        positiveNotes: rawFeedback.positive_notes || rawFeedback.positiveNotes || [],
+        alignmentScore: typeof rawFeedback.alignment_score === 'number' ? rawFeedback.alignment_score : (typeof rawFeedback.alignmentScore === 'number' ? rawFeedback.alignmentScore : 0),
+      };
+    }
+
+    return { detectedChanges, projectState, completedTasks, nextSteps, summary, feedback, nextStep };
   } catch (err) {
     console.warn('Failed to translate AI progress response:', err);
     return null;

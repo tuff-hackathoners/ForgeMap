@@ -108,3 +108,18 @@ figcaption { position: absolute; left: 10px; bottom: 10px; border-radius: 999px;
 .preview-image { width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px; }
 @media (max-width: 980px) { .nav, .content-grid, .content-grid.wide-left, .content-grid.equal-cols, .dashboard-grid, .answer-grid { grid-template-columns: 1fr; } .nav-links { justify-content: start; } }
 @media (max-width: 680px) { .form-row, .diff-images, .materials-list div, .commit-card, .task-row { grid-template-columns: 1fr; } h1 { font-size: clamp(2.2rem, 12vw, 3.6rem); } .flow-node { min-width: 100%; max-width: 100%; } .flow-arrow { display: none; } }
+
+/* ─── AI Feedback ─── */
+.feedback-block { margin-top: 16px; border: 1px solid #2a3040; border-radius: 12px; padding: 20px; }
+.feedback-assessment { color: #c8d0e0; font-size: 1.05rem; margin: 8px 0 12px; }
+.alignment-score { color: #9bb3ff; font-size: .85rem; }
+.positive-notes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.positive-note { background: rgba(145, 211, 159, .12); color: #91d39f; padding: 6px 12px; border-radius: 8px; font-size: .85rem; }
+.feedback-issues { display: grid; gap: 12px; }
+.feedback-issue { padding: 14px; border-radius: 10px; border-left: 4px solid; }
+.feedback-issue.severity-critical { border-color: #ff6b6b; background: rgba(255, 107, 107, .08); }
+.feedback-issue.severity-warning { border-color: #ffce9b; background: rgba(255, 206, 155, .08); }
+.feedback-issue.severity-suggestion { border-color: #9bb3ff; background: rgba(155, 179, 255, .08); }
+.issue-badge { font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; opacity: .85; }
+.issue-fix { margin: 6px 0 0; color: #a0aab8; font-size: .9rem; }
+.no-issues { color: #91d39f; font-style: italic; }

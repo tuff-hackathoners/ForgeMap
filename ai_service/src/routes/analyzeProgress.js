@@ -37,6 +37,14 @@ Compare what you see in the image against the previous project state and roadmap
   "remaining_tasks": [string],
   "problems": [string],
   "summary": string,
+  "feedback": {
+    "overall_assessment": string (1-2 sentence overall evaluation of the current build state),
+    "issues": [
+      { "description": string (what's wrong), "severity": "critical" | "warning" | "suggestion", "fix": string (how to correct it, be specific about placement/orientation/technique) }
+    ],
+    "positive_notes": [string] (things done well — reinforce good work),
+    "alignment_score": number (1-10 how well the current state aligns with the project plan)
+  },
   "next_step": {
     "task_id": string (the highest-priority unblocked task to work on next),
     "reason": string (why this is next — reference what was just completed),
@@ -50,6 +58,7 @@ Rules:
 - Only mark a task completed if the image gives clear evidence it's done.
 - "problems": only concrete visible issues, or empty array.
 - "summary": 1-3 sentences describing visible progress.
+- "feedback": carefully analyze the image for any mistakes, misalignments, incorrect placements, wrong orientations, or deviations from the plan. Be specific and constructive — tell the user EXACTLY what to fix and how. If everything looks correct, issues can be empty and alignment_score should be high. Always include at least one positive_note to encourage the builder.
 - "next_step": pick the single most important unblocked task. svg_guide = a 2D diagram of what this step looks like when finished (part shape, dimensions, spatial relationships). For CAD projects include openscad_code; for physical builds set it to null.
 - svg_guide: keep it simple — outline shapes, dimension text labels, key feature callouts. viewBox="0 0 200 150".`;
 }

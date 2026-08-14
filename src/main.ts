@@ -62,6 +62,19 @@ type Commit = {
   roadmapState?: Array<{ id: string; title: string; status: RoadmapStatus }>;
 };
 
+type FeedbackIssue = {
+  description: string;
+  severity: 'critical' | 'warning' | 'suggestion';
+  fix: string;
+};
+
+type Feedback = {
+  overallAssessment: string;
+  issues: FeedbackIssue[];
+  positiveNotes: string[];
+  alignmentScore: number;
+};
+
 type CommitAnalysis = {
   summary: string;
   nextSteps: string[];
@@ -71,6 +84,7 @@ type CommitAnalysis = {
     svgGuide?: string | null;
     openscadCode?: string | null;
   } | null;
+  feedback?: Feedback | null;
   fromAI: boolean;
 };
 
@@ -425,6 +439,7 @@ function renderUpdatePage() {
         ${analysis?.nextStep?.openscadCode ? renderCode(analysis.nextStep.openscadCode) : ""}
       </article>
     </section>
+    ${renderFeedback(analysis?.feedback)}
   `;
   return page;
 }
@@ -516,6 +531,35 @@ function renderSvg(svg?: string | null, fallback = "No SVG available.") {
     return `<div class="svg-box">${cleaned}</div>`;
   }
   return `<div class="svg-empty">${fallback}</div>`;
+}
+
+function renderFeedback(feedback?: Feedback | null) {
+  if (!feedback) return "";
+  const severityIcon = (s: string) => s === "critical" ? "🚨" : s === "warning" ? "⚠️" : "💡";
+  const severityClass = (s: string) => `feedback-issue severity-${s}`;
+
+  const issuesHtml = feedback.issues.length
+    ? feedback.issues.map((issue) => `
+        <div class="${severityClass(issue.severity)}">
+          <span class="issue-badge">${severityIcon(issue.severity)} ${issue.severity}</span>
+          <strong>${escapeHtml(issue.description)}</strong>
+          <p class="issue-fix">${escapeHtml(issue.fix)}</p>
+        </div>
+      `).join("")
+    : `<p class="no-issues">No issues detected — looking good!</p>`;
+
+  const positiveHtml = feedback.positiveNotes.length
+    ? `<div class="positive-notes">${feedback.positiveNotes.map((note) => `<span class="positive-note">✓ ${escapeHtml(note)}</span>`).join("")}</div>`
+    : "";
+
+  return `
+    <article class="section-block feedback-block">
+      <div class="section-title"><span>AI Feedback</span><strong class="alignment-score">Alignment: ${feedback.alignmentScore}/10</strong></div>
+      <p class="feedback-assessment">${escapeHtml(feedback.overallAssessment)}</p>
+      ${positiveHtml}
+      <div class="feedback-issues">${issuesHtml}</div>
+    </article>
+  `;
 }
 
 function renderCode(code: string) {
