@@ -14,6 +14,7 @@ model Project {
   budgetTarget  Float?   @map("budget_target")
   budgetActual  Float?   @map("budget_actual")
   skillLevel    String?  @map("skill_level")
+  aiData        String?  @map("ai_data") // JSON: assemblyDrawing, materials, tools, instructions, overview
   createdAt     DateTime @default(now()) @map("created_at")
 
   commits      Commit[]
@@ -46,6 +47,7 @@ model RoadmapTask {
   status       String @default("not_started") // not_started | in_progress | completed | blocked
   dependencies String @default("[]") @map("dependencies") // JSON array of task IDs
   order        Int    @default(0)
+  metadata     String? @map("metadata") // JSON: visualGuide, tips, openscadCode, svgProfile
 
   project Project @relation(fields: [projectId], references: [id])
 

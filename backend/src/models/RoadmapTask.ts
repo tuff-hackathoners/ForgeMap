@@ -10,6 +10,7 @@ export interface CreateRoadmapTaskInput {
   status?: TaskStatus;
   dependencies?: string[];
   order?: number;
+  metadata?: object;
 }
 
 export const RoadmapTaskModel = {
@@ -27,6 +28,7 @@ export const RoadmapTaskModel = {
         status: input.status ?? 'not_started',
         dependencies: JSON.stringify(input.dependencies ?? []),
         order: input.order ?? 0,
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
       },
     });
   },
@@ -56,9 +58,15 @@ export const RoadmapTaskModel = {
 
   /** Parse JSON string fields back into arrays for API responses */
   serialize(task: any) {
+    const meta = task.metadata ? JSON.parse(task.metadata) : {};
     return {
       ...task,
       dependencies: task.dependencies ? JSON.parse(task.dependencies) : [],
+      metadata: undefined, // remove raw JSON string
+      visualGuide: meta.visualGuide || null,
+      tips: meta.tips || [],
+      openscadCode: meta.openscadCode || null,
+      svgProfile: meta.svgProfile || null,
     };
   },
 };

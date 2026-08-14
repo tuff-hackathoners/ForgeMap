@@ -332,9 +332,9 @@ function renderDashboardPage() {
         ${renderMaterials(bundle.aiGenerated.materials)}
       </article>
     </section>
-    <section class="content-grid">
+    <section class="content-grid equal-cols">
       <article class="section-block">${renderTaskDetail(selectedTask() ?? active)}</article>
-      <article class="section-block">${renderInstructions(bundle.aiGenerated.instructions)}</article>
+      <article class="section-block">${renderInstructionsCompact(bundle.aiGenerated.instructions)}</article>
     </section>
   `;
   return article;
@@ -357,12 +357,15 @@ function renderRoadmapPage() {
 function renderTaskGraph() {
   const all = tasks();
   if (!all.length) return `<p>No roadmap yet.</p>`;
-  const step = 100 / Math.max(all.length, 1);
-  const lines = all.slice(1).map((_, i) => `<line x1="${step * i + step / 2}" y1="50" x2="${step * (i + 1) + step / 2}" y2="50" />`).join("");
   return `
-    <svg class="roadmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
-    <div class="roadmap-nodes">
-      ${all.map((task, i) => `<button type="button" data-task="${task.id}" class="task-node ${task.status} ${state.selectedTaskId === task.id ? "selected" : ""}" style="left:${step * i + step / 2}%"><span>${i + 1}</span><strong>${escapeHtml(task.title)}</strong></button>`).join("")}
+    <div class="roadmap-flow">
+      ${all.map((task, i) => `
+        ${i > 0 ? '<span class="flow-arrow">→</span>' : ''}
+        <button type="button" data-task="${task.id}" class="flow-node ${task.status} ${state.selectedTaskId === task.id ? "selected" : ""}">
+          <span class="flow-num">${i + 1}</span>
+          <strong>${escapeHtml(task.title)}</strong>
+        </button>
+      `).join("")}
     </div>
   `;
 }
@@ -492,8 +495,27 @@ function renderInstructions(instructions: string[]) {
   return `<div class="section-title"><span>Instructions</span></div><ul class="plain-list">${instructions.map((item) => `<li class="${item.trim().startsWith("⚠️") ? "warning" : ""}">${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
+function renderInstructionsCompact(instructions: string[]) {
+  if (!instructions.length) return `<div class="section-title"><span>Instructions</span></div><p>No instructions yet.</p>`;
+  const visible = instructions.slice(0, 6);
+  const remaining = instructions.length - visible.length;
+  return `<div class="section-title"><span>Instructions</span><small>${instructions.length} steps</small></div>
+    <ol class="instructions-compact">${visible.map((item) => `<li class="${item.trim().startsWith("⚠️") ? "warning" : ""}">${escapeHtml(item)}</li>`).join("")}</ol>
+    ${remaining > 0 ? `<button type="button" data-route="roadmap" class="secondary" style="margin-top:10px">View all ${instructions.length} steps →</button>` : ""}`;
+}
+
 function renderSvg(svg?: string | null, fallback = "No SVG available.") {
-  return svg ? `<div class="svg-box">${svg}</div>` : `<div class="svg-empty">${fallback}</div>`;
+  if (!svg || svg.length < 10) return `<div class="svg-empty">${fallback}</div>`;
+  let cleaned = svg.trim();
+  if (cleaned.startsWith("<svg") || cleaned.startsWith("&lt;svg")) {
+    if (cleaned.startsWith("&lt;")) {
+      cleaned = cleaned.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+    }
+    // Remove white background rects so SVG blends with dark theme
+    cleaned = cleaned.replace(/<rect[^>]*fill=['"](?:white|#fff|#ffffff)['"][^>]*\/?\s*>/gi, '');
+    return `<div class="svg-box">${cleaned}</div>`;
+  }
+  return `<div class="svg-empty">${fallback}</div>`;
 }
 
 function renderCode(code: string) {

@@ -53,9 +53,14 @@ input[type="date"]:focus + .date-placeholder, input[type="date"].has-value + .da
 .metric-block strong { display: block; margin: 8px 0; font-size: 1.4rem; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .7fr); gap: 28px; margin-bottom: 34px; }
 .content-grid.wide-left { grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); }
+.content-grid.equal-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .section-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
-.svg-box, .svg-empty, .empty-image { display: grid; place-items: center; min-height: 220px; border: 1px solid #242a35; border-radius: 8px; background: #10141b; color: #7f8a9b; overflow: hidden; }
-.svg-box svg { width: 100%; max-height: 320px; color: #d7dce5; }
+.svg-box, .svg-empty, .empty-image { display: grid; place-items: center; min-height: 220px; border: 1px solid #242a35; border-radius: 8px; background: #0d0f14; color: #7f8a9b; overflow: hidden; padding: 16px; }
+.svg-box svg { width: 100%; height: 100%; max-height: 480px; object-fit: contain; color: #d7dce5; }
+.svg-box svg rect[fill="white"], .svg-box svg rect[fill="#fff"], .svg-box svg rect[fill="#ffffff"] { fill: #0d0f14 !important; }
+.svg-box svg circle[fill="white"], .svg-box svg circle[fill="#fff"], .svg-box svg circle[fill="#ffffff"] { fill: #242a35 !important; stroke: #4f7cff !important; stroke-width: 1.5 !important; }
+.svg-box svg text { fill: #e7eaf0 !important; font-size: 10px !important; font-weight: 600; letter-spacing: 0.3px; }
+.svg-box svg line { stroke-opacity: 0.7; }
 .materials-list { display: grid; border-top: 1px solid #242a35; }
 .materials-list div { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; border-bottom: 1px solid #242a35; padding: 12px 0; }
 .detail-list { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; color: #9ca6b5; }
@@ -69,18 +74,23 @@ pre { margin: 0; overflow: auto; color: #d7dce5; background: #10141b; padding: 1
 .plain-list { margin: 0; padding-left: 18px; color: #d7dce5; }
 .plain-list li { margin: 8px 0; }
 .warning { color: #ffce9b; }
-.roadmap-canvas { position: relative; min-height: 330px; overflow: hidden; }
-.roadmap-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
-.roadmap-lines line { stroke: #3b4658; stroke-width: .8; vector-effect: non-scaling-stroke; }
-.roadmap-nodes { position: absolute; inset: 0; }
-.task-node { position: absolute; top: 50%; width: 140px; min-height: 88px; transform: translate(-50%, -50%); display: grid; gap: 6px; align-content: center; border-color: #303744; background: #151a23; text-align: left; }
-.task-node span { color: #7f8a9b; }
-.task-node.selected, .task-node.in_progress { border-color: #4f7cff; }
-.task-node.completed { border-color: #526070; }
-.task-node.blocked { border-color: #7d3f3b; }
+.roadmap-canvas { position: relative; min-height: 200px; overflow: hidden; }
+.roadmap-flow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 20px 0; }
+.flow-arrow { color: #4f7cff; font-size: 1.2rem; font-weight: 700; }
+.flow-node { display: flex; flex-direction: column; gap: 6px; min-width: 160px; max-width: 200px; min-height: 80px; padding: 14px 16px; border: 1px solid #303744; border-radius: 12px; background: #151a23; text-align: left; cursor: pointer; transition: border-color .15s; }
+.flow-node:hover { border-color: #4f7cff; background: #1a2030; }
+.flow-node.selected { border-color: #4f7cff; background: #1a2030; box-shadow: 0 0 0 3px rgba(79,124,255,.12); }
+.flow-node.completed { border-color: #3a7d4a; }
+.flow-node.completed .flow-num { background: #2a5a36; color: #91d39f; }
+.flow-node.in_progress { border-color: #4f7cff; }
+.flow-node.blocked { border-color: #7d3f3b; opacity: .7; }
+.flow-num { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: #242a35; color: #9ca6b5; font-size: .75rem; font-weight: 700; }
+.flow-node strong { font-size: .85rem; line-height: 1.3; }
+.instructions-compact { margin: 0; padding-left: 20px; color: #d7dce5; max-height: 320px; overflow-y: auto; }
+.instructions-compact li { margin: 6px 0; font-size: .9rem; line-height: 1.45; }
 .roadmap-list { display: grid; gap: 0; }
-.task-row, .commit-card { display: grid; grid-template-columns: 110px 1fr; gap: 14px; align-items: start; border: 0; border-bottom: 1px solid #242a35; border-radius: 0; background: transparent; color: #e7eaf0; padding: 14px 0; text-align: left; }
-.task-row small, .commit-card small { color: #9ca6b5; }
+.task-row, .commit-card { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 14px; align-items: start; border: 0; border-bottom: 1px solid #242a35; border-radius: 0; background: transparent; color: #e7eaf0; padding: 14px 0; text-align: left; }
+.task-row small, .commit-card small { color: #9ca6b5; font-size: .85rem; }
 .timeline { display: grid; }
 .commit-card { grid-template-columns: 86px 1fr auto; }
 .commit-card img, .thumbnail-empty { width: 86px; height: 64px; object-fit: cover; border-radius: 8px; background: #171b22; }
@@ -96,5 +106,5 @@ figcaption { position: absolute; left: 10px; bottom: 10px; border-radius: 999px;
 .diff-list.removed strong { color: #ffaaa5; }
 .document-page h2 { margin-top: 28px; }
 .preview-image { width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px; }
-@media (max-width: 980px) { .nav, .content-grid, .content-grid.wide-left, .dashboard-grid, .answer-grid { grid-template-columns: 1fr; } .nav-links { justify-content: start; } }
-@media (max-width: 680px) { .form-row, .diff-images, .materials-list div, .commit-card, .task-row { grid-template-columns: 1fr; } h1 { font-size: clamp(2.2rem, 12vw, 3.6rem); } .task-node { position: static; transform: none; width: 100%; margin-bottom: 10px; } .roadmap-canvas { min-height: auto; } .roadmap-lines { display: none; } .roadmap-nodes { position: static; } }
+@media (max-width: 980px) { .nav, .content-grid, .content-grid.wide-left, .content-grid.equal-cols, .dashboard-grid, .answer-grid { grid-template-columns: 1fr; } .nav-links { justify-content: start; } }
+@media (max-width: 680px) { .form-row, .diff-images, .materials-list div, .commit-card, .task-row { grid-template-columns: 1fr; } h1 { font-size: clamp(2.2rem, 12vw, 3.6rem); } .flow-node { min-width: 100%; max-width: 100%; } .flow-arrow { display: none; } }

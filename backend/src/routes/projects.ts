@@ -30,51 +30,49 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       referenceImage,
     });
 
-    // Create the project
+    // Create the project (store AI-generated data for retrieval)
+    const aiData = {
+      overview: aiResult.overview,
+      assemblyDrawing: aiResult.assemblyDrawing || null,
+      materials: aiResult.materials,
+      totalEstimatedCost: aiResult.totalEstimatedCost,
+      tools: aiResult.tools,
+      instructions: aiResult.instructions,
+      fromAI,
+    };
+
     const project = await ProjectModel.create({
       name: aiResult.name,
       idea,
       budgetTarget: budget ?? aiResult.totalEstimatedCost,
       skillLevel: skillLevel ?? 'beginner',
+      aiData,
     });
 
-    // Create roadmap tasks (store visual guide in description for persistence)
+    // Create roadmap tasks with metadata (tips, SVG, OpenSCAD)
     const tasks = await RoadmapTaskModel.createMany(
       project.id,
       aiResult.roadmap.map((step) => ({
         title: step.title,
-        description: step.visualGuide
-          ? `${step.description}\n\n📐 Visual Guide: ${step.visualGuide}`
-          : step.description,
+        description: step.description,
         order: step.order,
         dependencies: step.dependencies,
+        metadata: {
+          visualGuide: step.visualGuide || null,
+          tips: step.tips || [],
+          openscadCode: step.openscadCode || null,
+          svgProfile: step.svgProfile || null,
+        },
       }))
     );
-
-    // Build rich roadmap for the response (includes tips, openscad, svg)
-    const richRoadmap = tasks.map((task, idx) => ({
-      ...RoadmapTaskModel.serialize(task),
-      visualGuide: aiResult.roadmap[idx]?.visualGuide || null,
-      tips: aiResult.roadmap[idx]?.tips || [],
-      openscadCode: aiResult.roadmap[idx]?.openscadCode || null,
-      svgProfile: aiResult.roadmap[idx]?.svgProfile || null,
-    }));
 
     // Return full response
     res.status(201).json({
       project: {
         ...project,
-        roadmapTasks: richRoadmap,
+        roadmapTasks: tasks.map(RoadmapTaskModel.serialize),
       },
-      aiGenerated: {
-        overview: aiResult.overview,
-        assemblyDrawing: aiResult.assemblyDrawing || null,
-        materials: aiResult.materials,
-        totalEstimatedCost: aiResult.totalEstimatedCost,
-        tools: aiResult.tools,
-        instructions: aiResult.instructions,
-        fromAI,
-      },
+      aiGenerated: aiData,
     });
   } catch (err: any) {
     console.error('POST /projects error:', err);
@@ -94,10 +92,13 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Serialize JSON fields
+    const aiData = project.aiData ? JSON.parse(project.aiData) : null;
     res.json({
       ...project,
+      aiData: undefined,
       roadmapTasks: project.roadmapTasks.map(RoadmapTaskModel.serialize),
       commits: project.commits.map(CommitModel.serialize),
+      aiGenerated: aiData,
     });
   } catch (err: any) {
     console.error('GET /projects/:id error:', err);

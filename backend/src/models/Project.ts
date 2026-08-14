@@ -6,6 +6,7 @@ export interface CreateProjectInput {
   idea: string;
   budgetTarget?: number;
   skillLevel?: string;
+  aiData?: object;
 }
 
 export const ProjectModel = {
@@ -22,6 +23,7 @@ export const ProjectModel = {
         budgetTarget: input.budgetTarget ?? null,
         budgetActual: null,
         skillLevel: input.skillLevel ?? null,
+        aiData: input.aiData ? JSON.stringify(input.aiData) : null,
       },
     });
   },
