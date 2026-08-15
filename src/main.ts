@@ -339,7 +339,7 @@ function renderDashboardPage() {
     <section class="content-grid">
       <article class="section-block">
         <div class="section-title"><span>Assembly</span><button type="button" data-route="roadmap" class="secondary">View roadmap</button></div>
-        ${renderSvg(bundle.aiGenerated.assemblyDrawing, "No assembly drawing yet.")}
+        ${renderSvg(bundle.aiGenerated.assemblyDrawing, "No assembly drawing yet.", bundle.aiGenerated.fromAI && !bundle.aiGenerated.assemblyDrawing)}
       </article>
       <article class="section-block">
         <div class="section-title"><span>Materials</span></div>
@@ -519,7 +519,8 @@ function renderInstructionsCompact(instructions: string[]) {
     ${remaining > 0 ? `<button type="button" data-route="roadmap" class="secondary" style="margin-top:10px">View all ${instructions.length} steps →</button>` : ""}`;
 }
 
-function renderSvg(svg?: string | null, fallback = "No SVG available.") {
+function renderSvg(svg?: string | null, fallback = "No SVG available.", loading = false) {
+  if (loading && !svg) return `<div class="svg-box svg-loading"><span class="svg-spinner"></span><small>Generating drawing...</small></div>`;
   if (!svg || svg.length < 10) return `<div class="svg-empty">${fallback}</div>`;
   let cleaned = svg.trim();
   if (cleaned.startsWith("<svg") || cleaned.startsWith("&lt;svg")) {
@@ -528,6 +529,8 @@ function renderSvg(svg?: string | null, fallback = "No SVG available.") {
     }
     // Remove white background rects so SVG blends with dark theme
     cleaned = cleaned.replace(/<rect[^>]*fill=['"](?:white|#fff|#ffffff)['"][^>]*\/?\s*>/gi, '');
+    // Widen small viewBoxes to prevent text clipping (200x150 → 280x180)
+    cleaned = cleaned.replace(/viewBox=['"]0 0 200 150['"]/i, 'viewBox="0 0 280 180"');
     return `<div class="svg-box">${cleaned}</div>`;
   }
   return `<div class="svg-empty">${fallback}</div>`;
@@ -642,6 +645,31 @@ async function createProject(form: HTMLFormElement) {
   history.pushState(null, "", "#dashboard");
   saveState();
   render();
+
+  // Phase 2: generate SVG drawings in the background (non-blocking)
+  if (state.bundle.aiGenerated.fromAI && !state.bundle.aiGenerated.assemblyDrawing) {
+    generateDrawingsInBackground(state.bundle.project.id);
+  }
+}
+
+async function generateDrawingsInBackground(projectId: string) {
+  try {
+    const result = await api<{ assemblyDrawing: string | null; firstTaskSvg: string | null; firstTaskOpenscad: string | null }>(`/projects/${projectId}/drawings`, { method: "POST" });
+    if (!state.bundle) return;
+    if (result.assemblyDrawing) {
+      state.bundle.aiGenerated.assemblyDrawing = result.assemblyDrawing;
+    }
+    if (result.firstTaskSvg && state.bundle.project.roadmapTasks[0]) {
+      state.bundle.project.roadmapTasks[0].svgProfile = result.firstTaskSvg;
+    }
+    if (result.firstTaskOpenscad && state.bundle.project.roadmapTasks[0]) {
+      state.bundle.project.roadmapTasks[0].openscadCode = result.firstTaskOpenscad;
+    }
+    saveState();
+    render();
+  } catch {
+    // Silently fail — drawings are optional enhancement
+  }
 }
 
 function bindUploadForm() {

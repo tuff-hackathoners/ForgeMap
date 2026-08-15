@@ -55,8 +55,11 @@ input[type="date"]:focus + .date-placeholder, input[type="date"].has-value + .da
 .content-grid.wide-left { grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr); }
 .content-grid.equal-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .section-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
-.svg-box, .svg-empty, .empty-image { display: grid; place-items: center; min-height: 220px; border: 1px solid #242a35; border-radius: 8px; background: #0d0f14; color: #7f8a9b; overflow: hidden; padding: 16px; }
-.svg-box svg { width: 100%; height: 100%; max-height: 480px; object-fit: contain; color: #d7dce5; }
+.svg-box, .svg-empty, .svg-loading, .empty-image { display: grid; place-items: center; min-height: 220px; border: 1px solid #242a35; border-radius: 8px; background: #0d0f14; color: #7f8a9b; overflow: hidden; padding: 16px; }
+.svg-loading { gap: 12px; }
+.svg-spinner { width: 28px; height: 28px; border: 3px solid #242a35; border-top-color: #4f7cff; border-radius: 50%; animation: spin 900ms linear infinite; }
+.svg-box svg { width: 100%; height: auto; max-height: 480px; display: block; color: #d7dce5; }
+.svg-box { overflow: hidden; padding: 20px; }
 .svg-box svg rect[fill="white"], .svg-box svg rect[fill="#fff"], .svg-box svg rect[fill="#ffffff"] { fill: #0d0f14 !important; }
 .svg-box svg circle[fill="white"], .svg-box svg circle[fill="#fff"], .svg-box svg circle[fill="#ffffff"] { fill: #242a35 !important; stroke: #4f7cff !important; stroke-width: 1.5 !important; }
 .svg-box svg text { fill: #e7eaf0 !important; font-size: 10px !important; font-weight: 600; letter-spacing: 0.3px; }

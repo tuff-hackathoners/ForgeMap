@@ -381,7 +381,7 @@ export async function generateInitialProject(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180000), // 3 min timeout — LLM calls can be slow via Backboard
+      signal: AbortSignal.timeout(300000), // 5 min timeout — Backboard can be very slow
     });
 
     if (!response.ok) {
@@ -441,7 +441,7 @@ export async function analyzeProgress(
     const response = await fetch(`${AI_SERVICE_URL}/analyze-progress`, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(180000), // 3 min timeout
+      signal: AbortSignal.timeout(300000), // 3 min timeout
     });
 
     if (!response.ok) {
@@ -486,7 +486,7 @@ export async function generateDocumentation(
         original_roadmap: roadmapTasks,
         final_roadmap: roadmapTasks,
       }),
-      signal: AbortSignal.timeout(180000), // 3 min timeout
+      signal: AbortSignal.timeout(300000), // 3 min timeout
     });
 
     if (!response.ok) {

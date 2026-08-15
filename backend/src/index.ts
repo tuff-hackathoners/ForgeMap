@@ -8,6 +8,7 @@ import commitsRouter from './routes/commits';
 import stateRouter from './routes/state';
 import roadmapRouter from './routes/roadmap';
 import documentationRouter from './routes/documentation';
+import drawingsRouter from './routes/drawings';
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ app.use('/projects', commitsRouter);
 app.use('/projects', stateRouter);
 app.use('/projects', roadmapRouter);
 app.use('/projects', documentationRouter);
+app.use('/projects', drawingsRouter);
 
 // ─── Health check ───
 app.get('/health', (_req, res) => {

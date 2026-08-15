@@ -4,6 +4,7 @@ import generateProjectRoute from "./routes/generateProject.js";
 import analyzeProgressRoute from "./routes/analyzeProgress.js";
 import nextStepsRoute from "./routes/nextSteps.js";
 import generateDocsRoute from "./routes/generateDocs.js";
+import generateDrawingsRoute from "./routes/generateDrawings.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use(generateProjectRoute);
 app.use(analyzeProgressRoute);
 app.use(nextStepsRoute);
 app.use(generateDocsRoute);
+app.use(generateDrawingsRoute);
 
 // Catch malformed JSON bodies from express.json() middleware.
 // Without this, a client sending invalid JSON gets a raw SyntaxError leak.

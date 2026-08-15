@@ -20,7 +20,7 @@ function buildProjectGenerationPrompt({ idea, budget, skill_level, deadline, too
 }
 
 function buildCADPrompt({ idea, budget, skill_level, deadline, tools_available }) {
-  return `You are an expert CAD/mechanical engineer. Generate a modeling plan with accurate technical drawings.
+  return `You are an expert CAD/mechanical engineer. Generate a modeling plan.
 
 CONTEXT:
 - Project: "${idea}"
@@ -28,52 +28,23 @@ CONTEXT:
 - Skill: ${skill_level || "beginner"}
 - CAD tools: ${tools_available?.length ? tools_available.join(", ") : "Fusion 360 or FreeCAD"}
 
-CRITICAL — ASSEMBLY DRAWING REQUIREMENTS:
-The "assembly_drawing" SVG must look like a REAL ENGINEERING ASSEMBLY DRAWING:
-- viewBox="0 0 400 350". NO background rects. NO white fills.
-- IMPORTANT: Use SINGLE QUOTES for ALL SVG attribute values (e.g., fill='#5a6a7a' not fill="#5a6a7a") since the SVG is inside a JSON double-quoted string
-- Draw the actual mechanism geometry using proper shapes: rect for plates, ellipse+rect for cylindrical parts viewed from the side, polygons for brackets. Parts should look like their REAL 3D shape in a 3/4 isometric-ish side view.
-- Use muted fills for parts (#5a6a7a, #6a7a8a, #7a8a9a, #8a9aaa) with #333 stroke outlines
-- Each JOINT gets a small dashed arc arrow showing its rotation direction. Color-code: red arc=pan(vertical axis), green arc=tilt(horizontal axis), blue arc=roll(axial)
-- Place small numbered colored squares (12x12, fill=#e53935/#43a047/#1e88e5/#fb8c00, white number inside) next to each part — NOT overlapping it
-- LEGEND at y=265-340: two columns (x=15 and x=210), each line = colored square + number + "Part name — dim". 20px vertical spacing between lines.
-- ALL TEXT: fill='#ddd', font-size='10'
-- The drawing must be MECHANICALLY CORRECT — a 3 DOF arm must show: base with vertical pan axis, arm with horizontal tilt axis at one end, and roll joint at the other end with cradle. NOT abstract blobs.
+Return ONLY valid JSON (no markdown fences). Do NOT include any SVG or OpenSCAD code — those will be generated separately.
 
-TASK 1 SVG PROFILE:
-- Same quality standard: viewBox="0 0 200 150", draw the ACTUAL cross-section of the first part with proper geometry
-- Use SINGLE QUOTES for all SVG attribute values (same reason — inside JSON string)
-- Use fills #5a6a7a for solid material, #1a2030 for holes/cuts, #333 stroke
-- Annotate with dimension lines and text (fill='#ddd', font-size='9')
-- Show the key features: holes, counterbores, slots, chamfers as they actually look in cross-section
-
-Return ONLY valid JSON (no markdown fences):
 {
   "project_overview": { "title": string, "description": string (part count, manufacturing, joint types) },
-  "assembly_drawing": string (SVG per requirements above),
+  "assembly_drawing": null,
   "materials": [{ "name": string, "quantity": string, "estimated_price": number }],
   "tools": [string],
   "budget": { "estimated_total": number, "currency": "USD" },
   "roadmap": [
     {
-      "id": "task_1",
-      "title": string ("Model the [part name]"),
-      "description": string (exact dims, features, tolerances),
-      "openscad_code": string (valid OpenSCAD, under 15 lines),
-      "svg_profile": string (SVG cross-section per requirements above),
-      "visual_guide": string (brief CAD viewport description),
-      "tips": [string, string],
-      "status": "not_started",
-      "depends_on": []
-    },
-    {
-      "id": "task_2+",
-      "title": string,
-      "description": string (exact dims, how it mates),
+      "id": "task_N",
+      "title": string ("Model the [part name]" or "Assemble..." or "Export..."),
+      "description": string (exact dims, features, tolerances, how it mates to other parts),
       "openscad_code": null,
       "svg_profile": null,
-      "visual_guide": string,
-      "tips": [string, string],
+      "visual_guide": string (describe what the CAD viewport should show),
+      "tips": [string, string] (CAD-specific tips),
       "status": "not_started",
       "depends_on": [string]
     }
@@ -85,12 +56,12 @@ Return ONLY valid JSON (no markdown fences):
 
 RULES:
 - 5-6 tasks: 3-4 parts + 1 assembly + 1 export
-- Assembly drawing must be mechanically accurate to the project idea
-- task_1: include openscad_code + svg_profile (both high quality, matching the part description)
-- Other tasks: openscad_code=null, svg_profile=null
+- Descriptions must include exact dimensions, wall thicknesses, hole sizes with tolerances, and joint/mating features
 - Independent parts have no dependencies (can be modeled in parallel)
 - Include tolerances: +0.2mm on bolt clearance holes, -0.1mm on press-fits
-- Budget = manufacturing materials only`;
+- The mechanism must be MECHANICALLY CORRECT for the requested DOF
+- Budget = manufacturing materials only
+- Keep response concise — NO SVG strings, NO OpenSCAD code in this response`;
 }
 
 function buildPhysicalBuildPrompt({ idea, budget, skill_level, deadline, tools_available }) {
@@ -104,7 +75,8 @@ CONTEXT:
 - Tools available: ${tools_available?.length ? tools_available.join(", ") : "basic hand tools"}
 
 PRINCIPLES:
-- Default to MECHANICAL construction (wood, metal, 3D-print) unless user explicitly says electronics/Arduino/code
+- Choose materials appropriate to the project SCALE: small desktop items (phone holders, gadgets, brackets, mounts) → prefer 3D printing (FDM/PLA). Medium/large items (furniture, shelves, structures) → wood or metal. Only suggest wood for small projects if the user specifically asks for it.
+- Default to MECHANICAL construction unless user explicitly says electronics/Arduino/code
 - Roadmap tasks should represent meaningful BUILD MILESTONES, not micro-steps
 - Each task results in something you can photograph to prove it's done
 - Dependencies must reflect real physical constraints (can't attach parts before cutting them)
