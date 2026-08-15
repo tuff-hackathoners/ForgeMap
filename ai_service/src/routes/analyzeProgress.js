@@ -4,82 +4,51 @@ import { mockProgressAnalysis } from "../mocks/mockResponses.js";
 
 const router = Router();
 
-// Keep the file in memory — we pass the buffer straight to Backboard,
-// we never write to disk ourselves (backend owns storage/).
 const upload = multer({ storage: multer.memoryStorage() });
 
 const BACKBOARD_BASE = "https://app.backboard.io/api";
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 20; // ~40s max wait for indexing
+const POLL_INTERVAL_MS = 1500;
+const MAX_POLL_ATTEMPTS = 25; // ~37s max wait
 
 /**
- * Builds the prompt sent to Claude for progress analysis, once the
- * uploaded image is indexed and available to the assistant as context.
+ * Builds a concise but thorough prompt for progress analysis.
+ * Optimized for token efficiency while preserving output quality.
  */
 function buildProgressAnalysisPrompt({ project_state, roadmap, user_note }) {
-  return `You are a progress-analysis assistant for "Physical Git," an app that tracks physical build projects through photos.
+  // Only include relevant state fields to reduce prompt size
+  const compactState = JSON.stringify(project_state);
+  const compactRoadmap = JSON.stringify(roadmap);
 
-An image showing the current state of the build has just been uploaded and is available to you as context — look at it carefully.
+  return `You are a build-progress analyst for physical/DIY projects. An image of the current build state is available — examine it carefully.
 
-Previous project state:
-${JSON.stringify(project_state, null, 2)}
+PROJECT STATE: ${compactState}
 
-Current roadmap (each task has an id, status, and depends_on):
-${JSON.stringify(roadmap, null, 2)}
+ROADMAP: ${compactRoadmap}
 
-${user_note ? `User's note about this update: "${user_note}"` : "No additional user note was provided."}
+${user_note ? `USER NOTE: "${user_note}"` : ""}
 
-Compare what you see in the image against the previous project state and roadmap. Respond with ONLY valid JSON, no markdown code fences:
+Analyze the image vs. the plan. Return ONLY valid JSON (no code fences):
 
-{
-  "detected_changes": { "added": [string], "removed": [string], "changed": [string] },
-  "completed_tasks": [string],
-  "remaining_tasks": [string],
-  "problems": [string],
-  "summary": string,
-  "feedback": {
-    "overall_assessment": string (1-2 sentence overall evaluation of the current build state),
-    "issues": [
-      { "description": string (what's wrong), "severity": "critical" | "warning" | "suggestion", "fix": string (how to correct it, be specific about placement/orientation/technique) }
-    ],
-    "positive_notes": [string] (things done well — reinforce good work),
-    "alignment_score": number (1-10 how well the current state aligns with the project plan)
-  },
-  "next_step": {
-    "task_id": string (the highest-priority unblocked task to work on next),
-    "reason": string (why this is next — reference what was just completed),
-    "svg_guide": string (SVG with viewBox="0 0 200 150" showing what this next step looks like when DONE — a simple engineering sketch with dimension labels and key features),
-    "openscad_code": string or null (if CAD/3D-printing project: valid OpenSCAD under 15 lines; otherwise null for physical builds)
-  }
-}
+{"detected_changes":{"added":[string],"removed":[string],"changed":[string]},"completed_tasks":[string],"remaining_tasks":[string],"problems":[string],"summary":string,"feedback":{"overall_assessment":string,"issues":[{"description":string,"severity":"critical"|"warning"|"suggestion","fix":string}],"positive_notes":[string],"alignment_score":number},"next_step":{"task_id":string,"reason":string,"svg_guide":string,"openscad_code":string|null}}
 
-Rules:
-- "completed_tasks" and "remaining_tasks" must only contain task ids from the provided roadmap.
-- Only mark a task completed if the image gives clear evidence it's done.
-- "problems": only concrete visible issues, or empty array.
-- "summary": 1-3 sentences describing visible progress.
-- "feedback": carefully analyze the image for any mistakes, misalignments, incorrect placements, wrong orientations, or deviations from the plan. Be specific and constructive — tell the user EXACTLY what to fix and how. If everything looks correct, issues can be empty and alignment_score should be high. Always include at least one positive_note to encourage the builder.
-- "next_step": pick the single most important unblocked task. svg_guide = a 2D diagram of what this step looks like when finished (part shape, dimensions, spatial relationships). For CAD projects include openscad_code; for physical builds set it to null.
-- svg_guide: keep it simple — outline shapes, dimension text labels, key feature callouts. viewBox="0 0 200 150".`;
+RULES:
+1. completed_tasks/remaining_tasks: use only task IDs from the roadmap
+2. Only mark tasks complete with clear visual evidence
+3. problems: concrete visible issues only, or []
+4. summary: 1-3 sentences of visible progress
+5. feedback.issues: be SPECIFIC — exact placement, orientation, measurement errors. Tell the user precisely what to fix and how. If nothing wrong, leave issues empty and score high
+6. feedback.positive_notes: always include at least one encouraging note
+7. feedback.alignment_score: 1-10 (plan adherence)
+8. next_step.task_id: highest-priority unblocked task
+9. next_step.svg_guide: simple SVG (viewBox="0 0 200 150") showing the finished next step — outlines, dimensions, labels. No fills
+10. next_step.openscad_code: only for CAD/3D projects (max 15 lines), otherwise null`;
 }
 
 /**
  * POST /analyze-progress
  *
- * Accepts a progress photo and current project context, returns an analysis
- * of what changed, what's complete, and any problems detected.
- *
- * @requestBody multipart/form-data
- * @field {file}   image         - Required. The progress photo (buffer kept in memory).
- * @field {string} project_state - Required. JSON string of current project_state object.
- * @field {string} roadmap       - Required. JSON string of current roadmap array.
- * @field {string} [user_note]   - Optional. Free-text note from the user.
- *
- * @response 200 {object} shape:
- *   { detected_changes, completed_tasks, remaining_tasks, problems, summary }
- * @response 400 {object} { error: string } — missing file or invalid fields
- * @response 500 {object} { error: string } — AI analysis failure
- * @response 502 {object} { error: string } — LLM provider returned an error
+ * Accepts a progress photo + project context, returns structured analysis
+ * with feedback on correctness and next steps.
  */
 router.post("/analyze-progress", upload.single("image"), async (req, res) => {
   if (!req.file) {
@@ -119,27 +88,14 @@ router.post("/analyze-progress", upload.single("image"), async (req, res) => {
   const imageMimeType = req.file.mimetype || "image/jpeg";
 
   try {
-    // Step 1: create a throwaway assistant to own this image upload.
-    const assistantResponse = await fetch(`${BACKBOARD_BASE}/assistants`, {
-      method: "POST",
-      headers: {
-        "X-API-Key": process.env.BACKBOARD_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: "Physical Git Progress Analyzer",
-        system_prompt: "You analyze photos of in-progress physical builds and report structured progress data."
-      })
+    // Step 1: Create assistant
+    const assistant = await backboardPost("/assistants", {
+      name: "ForgeMap Progress Analyzer",
+      system_prompt: "You analyze photos of in-progress physical builds. Return structured JSON only."
     });
-
-    if (!assistantResponse.ok) {
-      throw new Error(`Backboard assistant creation returned status ${assistantResponse.status}`);
-    }
-
-    const assistant = await assistantResponse.json();
     const assistantId = assistant.assistant_id;
 
-    // Step 2: upload the image to that assistant as a document.
+    // Step 2: Upload image
     const form = new FormData();
     form.append("file", new Blob([imageBuffer], { type: imageMimeType }), "progress.jpg");
 
@@ -150,76 +106,81 @@ router.post("/analyze-progress", upload.single("image"), async (req, res) => {
     });
 
     if (!uploadResponse.ok) {
-      throw new Error(`Backboard document upload returned status ${uploadResponse.status}`);
+      throw new Error(`Document upload failed: ${uploadResponse.status}`);
     }
 
     const document = await uploadResponse.json();
 
-    // Step 3: poll until the image is indexed and ready to use as context.
-    let indexed = false;
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-      const statusResponse = await fetch(`${BACKBOARD_BASE}/documents/${document.document_id}/status`, {
-        headers: { "X-API-Key": process.env.BACKBOARD_API_KEY }
-      });
-      const statusData = await statusResponse.json();
+    // Step 3: Poll for indexing (with exponential-ish backoff)
+    await waitForIndexing(document.document_id);
 
-      if (statusData.status === "indexed") {
-        indexed = true;
-        break;
-      }
-      if (statusData.status === "error") {
-        throw new Error(`Document indexing failed: ${statusData.status_message || "unknown error"}`);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    }
-
-    if (!indexed) {
-      throw new Error("Image did not finish indexing in time");
-    }
-
-    // Step 4: ask the assistant to analyze the now-indexed image.
+    // Step 4: Get analysis from LLM
     const prompt = buildProgressAnalysisPrompt({ project_state, roadmap, user_note });
 
-    const messageResponse = await fetch(`${BACKBOARD_BASE}/threads/messages`, {
-      method: "POST",
-      headers: {
-        "X-API-Key": process.env.BACKBOARD_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        content: prompt,
-        assistant_id: assistantId,
-        llm_provider: "anthropic",
-        model_name: process.env.AI_MODEL || "claude-sonnet-5",
-        stream: false
-      })
+    const data = await backboardPost("/threads/messages", {
+      content: prompt,
+      assistant_id: assistantId,
+      llm_provider: "anthropic",
+      model_name: process.env.AI_MODEL || "claude-sonnet-5",
+      stream: false
     });
-
-    if (!messageResponse.ok) {
-      throw new Error(`Backboard API returned status ${messageResponse.status}`);
-    }
-
-    const data = await messageResponse.json();
 
     if (!data.content || data.content.startsWith("LLM Error")) {
       console.error("Backboard LLM error:", data.content);
       return res.status(502).json({ error: "LLM provider returned an error" });
     }
 
-    // Strip markdown code fences if the model wraps the JSON
+    // Strip markdown code fences if present
     let rawContent = data.content.trim();
     if (rawContent.startsWith("```")) {
       rawContent = rawContent.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
     }
 
     const result = JSON.parse(rawContent);
-
     return res.status(200).json(result);
   } catch (err) {
     console.error("analyze-progress failed:", err);
     return res.status(500).json({ error: "AI analysis failed" });
   }
 });
+
+// ─── Helpers ───
+
+async function backboardPost(path, body) {
+  const response = await fetch(`${BACKBOARD_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": process.env.BACKBOARD_API_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backboard ${path} returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function waitForIndexing(documentId) {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    const statusResponse = await fetch(`${BACKBOARD_BASE}/documents/${documentId}/status`, {
+      headers: { "X-API-Key": process.env.BACKBOARD_API_KEY }
+    });
+    const statusData = await statusResponse.json();
+
+    if (statusData.status === "indexed") return;
+    if (statusData.status === "error") {
+      throw new Error(`Document indexing failed: ${statusData.status_message || "unknown"}`);
+    }
+
+    // Slightly faster initial polls, slower later
+    const delay = attempt < 5 ? POLL_INTERVAL_MS : POLL_INTERVAL_MS * 1.5;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  throw new Error("Image did not finish indexing in time");
+}
 
 export default router;
